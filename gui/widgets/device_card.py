@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QMenu, QApplication,
+    QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QAction
 
 from core.i18n import tr
 from models.device import Device, DeviceType
@@ -36,17 +37,46 @@ class DeviceCard(QFrame):
     double_clicked = Signal(object) # Device
     audit_requested = Signal(object)
 
+    # Context menu action signals
+    scan_quick = Signal(object)     # Device
+    scan_standard = Signal(object)  # Device
+    scan_deep = Signal(object)      # Device
+    vuln_scan = Signal(object)      # Device
+    send_to_msf = Signal(object)    # Device
+    remove_device = Signal(object)  # Device
+
+    # Selection
+    selection_changed = Signal(object, bool)  # Device, is_selected
+
     def __init__(self, device: Device, parent=None):
         super().__init__(parent)
         self.device = device
+        self._selected = False
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFrameStyle(QFrame.Shape.StyledPanel)
         self.setFixedHeight(80)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
+        self._apply_style()
+        self._setup_ui()
+
+    @property
+    def is_selected(self) -> bool:
+        return self._selected
+
+    def set_selected(self, selected: bool) -> None:
+        self._selected = selected
+        self._checkbox.setChecked(selected)
+        self._apply_style()
+
+    def _apply_style(self) -> None:
+        border_color = "#5a7ea0" if self._selected else "#252530"
+        bg = "#1c1c28" if self._selected else "#18181e"
         self.setStyleSheet(f"""
             DeviceCard {{
-                background-color: #18181e;
-                border: 1px solid #252530;
-                border-left: 3px solid {device.risk_level.color};
+                background-color: {bg};
+                border: 1px solid {border_color};
+                border-left: 3px solid {self.device.risk_level.color};
                 border-radius: 4px;
                 padding: 8px;
             }}
@@ -55,12 +85,22 @@ class DeviceCard(QFrame):
                 border-color: #5a7ea0;
             }}
         """)
-        self._setup_ui()
 
     def _setup_ui(self) -> None:
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(10)
+        layout.setContentsMargins(4, 6, 8, 6)
+        layout.setSpacing(8)
+
+        # Checkbox for multi-select
+        self._checkbox = QCheckBox()
+        self._checkbox.setFixedSize(18, 18)
+        self._checkbox.setStyleSheet("""
+            QCheckBox::indicator { width: 14px; height: 14px; }
+            QCheckBox::indicator:unchecked { border: 1px solid #404050; background: #18181e; border-radius: 2px; }
+            QCheckBox::indicator:checked { border: 1px solid #5a7ea0; background: #5a7ea0; border-radius: 2px; }
+        """)
+        self._checkbox.toggled.connect(self._on_checkbox_toggled)
+        layout.addWidget(self._checkbox)
 
         # Icon
         icon_label = QLabel(DEVICE_ICONS.get(self.device.device_type, "?"))
@@ -100,8 +140,57 @@ class DeviceCard(QFrame):
         info_layout.addWidget(risk_label)
         layout.addLayout(info_layout, 1)
 
+    def _on_checkbox_toggled(self, checked: bool) -> None:
+        self._selected = checked
+        self._apply_style()
+        self.selection_changed.emit(self.device, checked)
+
+    def _show_context_menu(self, pos) -> None:
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #1c1c24;
+                border: 1px solid #303040;
+                color: #b0b0b8;
+                padding: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #2a2a38;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #303040;
+                margin: 4px 8px;
+            }
+        """)
+
+        # Scan submenu
+        scan_menu = menu.addMenu(tr("Rescan Host"))
+        scan_menu.addAction(tr("Quick Scan"), lambda: self.scan_quick.emit(self.device))
+        scan_menu.addAction(tr("Standard Scan"), lambda: self.scan_standard.emit(self.device))
+        scan_menu.addAction(tr("Deep Scan"), lambda: self.scan_deep.emit(self.device))
+
+        menu.addAction(tr("Vulnerability Scan"), lambda: self.vuln_scan.emit(self.device))
+        menu.addSeparator()
+        menu.addAction(tr("Send to Metasploit"), lambda: self.send_to_msf.emit(self.device))
+        menu.addSeparator()
+        menu.addAction(tr("Copy IP"), lambda: QApplication.clipboard().setText(self.device.ip))
+
+        if self.device.mac:
+            menu.addAction(tr("Copy MAC"), lambda: QApplication.clipboard().setText(self.device.mac))
+
+        menu.addSeparator()
+        menu.addAction(tr("View Details"), lambda: self.double_clicked.emit(self.device))
+        menu.addSeparator()
+
+        remove_action = menu.addAction(tr("Remove from Results"))
+        remove_action.triggered.connect(lambda: self.remove_device.emit(self.device))
+
+        menu.exec(self.mapToGlobal(pos))
+
     def mousePressEvent(self, event) -> None:
-        self.clicked.emit(self.device)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(self.device)
         super().mousePressEvent(event)
 
     def mouseDoubleClickEvent(self, event) -> None:
@@ -116,16 +205,4 @@ class DeviceCard(QFrame):
             if item.widget():
                 item.widget().deleteLater()
         self._setup_ui()
-        self.setStyleSheet(f"""
-            DeviceCard {{
-                background-color: #18181e;
-                border: 1px solid #252530;
-                border-left: 3px solid {device.risk_level.color};
-                border-radius: 4px;
-                padding: 8px;
-            }}
-            DeviceCard:hover {{
-                background-color: #1c1c24;
-                border-color: #5a7ea0;
-            }}
-        """)
+        self._apply_style()

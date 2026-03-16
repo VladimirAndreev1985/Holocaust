@@ -9,12 +9,14 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsEllipseItem,
     QGraphicsTextItem, QGraphicsLineItem, QGraphicsItem,
+    QMenu, QApplication,
 )
 from PySide6.QtCore import Qt, QPointF, QRectF, Signal
 from PySide6.QtGui import (
     QPen, QBrush, QColor, QFont, QPainter, QRadialGradient,
 )
 
+from core.i18n import tr
 from models.device import Device, DeviceType, RiskLevel
 
 
@@ -88,8 +90,8 @@ class DeviceNode(QGraphicsEllipseItem):
         self._type_label.setPlainText(self._get_type_icon())
         self._type_label.setDefaultTextColor(QColor("white"))
         self._type_label.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        tr = self._type_label.boundingRect()
-        self._type_label.setPos(-tr.width()/2, -tr.height()/2)
+        tr_ = self._type_label.boundingRect()
+        self._type_label.setPos(-tr_.width()/2, -tr_.height()/2)
 
         # Tooltip
         tooltip = (
@@ -167,6 +169,14 @@ class NetworkGraph(QGraphicsView):
     device_clicked = Signal(object)         # Device
     device_double_clicked = Signal(object)  # Device
 
+    # Context menu action signals
+    device_scan_quick = Signal(object)      # Device
+    device_scan_standard = Signal(object)   # Device
+    device_scan_deep = Signal(object)       # Device
+    device_vuln_scan = Signal(object)       # Device
+    device_send_to_msf = Signal(object)     # Device
+    device_remove = Signal(object)          # Device
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._scene = QGraphicsScene(self)
@@ -175,6 +185,8 @@ class NetworkGraph(QGraphicsView):
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.SmartViewportUpdate)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._on_context_menu)
 
         self.setStyleSheet("background-color: #0b0b0f; border: 1px solid #252530;")
 
@@ -227,6 +239,12 @@ class NetworkGraph(QGraphicsView):
                     edge = EdgeLine(self._nodes[self._gateway_ip], new_node)
                     self._scene.addItem(edge)
 
+    def remove_device(self, ip: str) -> None:
+        """Remove a device node from the graph."""
+        if ip in self._nodes:
+            node = self._nodes.pop(ip)
+            self._scene.removeItem(node)
+
     def clear_graph(self) -> None:
         self._scene.clear()
         self._nodes.clear()
@@ -235,20 +253,75 @@ class NetworkGraph(QGraphicsView):
         self.fitInView(self._scene.sceneRect().adjusted(-50, -50, 50, 50),
                        Qt.AspectRatioMode.KeepAspectRatio)
 
-    def mouseDoubleClickEvent(self, event) -> None:
-        item = self.itemAt(event.pos())
+    def _get_node_at(self, pos) -> DeviceNode | None:
+        """Find DeviceNode under a viewport position."""
+        item = self.itemAt(pos)
         if isinstance(item, DeviceNode):
-            self.device_double_clicked.emit(item.device)
-        elif item and isinstance(item.parentItem(), DeviceNode):
-            self.device_double_clicked.emit(item.parentItem().device)
+            return item
+        if item and isinstance(item.parentItem(), DeviceNode):
+            return item.parentItem()
+        return None
+
+    def _on_context_menu(self, pos) -> None:
+        node = self._get_node_at(pos)
+        if not node:
+            return
+
+        device = node.device
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #1c1c24;
+                border: 1px solid #303040;
+                color: #b0b0b8;
+                padding: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #2a2a38;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #303040;
+                margin: 4px 8px;
+            }
+        """)
+
+        # Header label
+        header = menu.addAction(f"{device.display_name} ({device.ip})")
+        header.setEnabled(False)
+        menu.addSeparator()
+
+        # Scan submenu
+        scan_menu = menu.addMenu(tr("Rescan Host"))
+        scan_menu.addAction(tr("Quick Scan"), lambda: self.device_scan_quick.emit(device))
+        scan_menu.addAction(tr("Standard Scan"), lambda: self.device_scan_standard.emit(device))
+        scan_menu.addAction(tr("Deep Scan"), lambda: self.device_scan_deep.emit(device))
+
+        menu.addAction(tr("Vulnerability Scan"), lambda: self.device_vuln_scan.emit(device))
+        menu.addSeparator()
+        menu.addAction(tr("Send to Metasploit"), lambda: self.device_send_to_msf.emit(device))
+        menu.addSeparator()
+        menu.addAction(tr("Copy IP"), lambda: QApplication.clipboard().setText(device.ip))
+        if device.mac:
+            menu.addAction(tr("Copy MAC"), lambda: QApplication.clipboard().setText(device.mac))
+        menu.addSeparator()
+        menu.addAction(tr("View Details"), lambda: self.device_double_clicked.emit(device))
+        menu.addSeparator()
+        menu.addAction(tr("Remove from Results"), lambda: self.device_remove.emit(device))
+
+        menu.exec(self.mapToGlobal(pos))
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        node = self._get_node_at(event.pos())
+        if node:
+            self.device_double_clicked.emit(node.device)
         super().mouseDoubleClickEvent(event)
 
     def mousePressEvent(self, event) -> None:
-        item = self.itemAt(event.pos())
-        if isinstance(item, DeviceNode):
-            self.device_clicked.emit(item.device)
-        elif item and isinstance(item.parentItem(), DeviceNode):
-            self.device_clicked.emit(item.parentItem().device)
+        if event.button() == Qt.MouseButton.LeftButton:
+            node = self._get_node_at(event.pos())
+            if node:
+                self.device_clicked.emit(node.device)
         super().mousePressEvent(event)
 
     def wheelEvent(self, event) -> None:

@@ -299,6 +299,94 @@ class PcAuditWorker(QThread):
         self._abort = True
 
 
+class HostScanWorker(QThread):
+    """Worker for rescanning specific hosts (single or batch) at chosen depth.
+
+    Unlike FullScanWorker which does discovery first, this takes already-known
+    IPs and runs detailed scans + optional vuln scan on each.
+    """
+    progress = Signal(str, int)
+    host_updated = Signal(object)       # Device (updated)
+    vuln_found = Signal(object)         # Vulnerability
+    finished = Signal()
+    error = Signal(str)
+
+    def __init__(self, devices: list[Device], config: ScanConfig | None = None,
+                 vuln_scan: bool = False, parent=None):
+        super().__init__(parent)
+        self._devices = devices
+        self._config = config or ScanConfig()
+        self._vuln_scan = vuln_scan
+        self._scanner = LanScanner(self._config)
+        self._classifier = DeviceClassifier()
+        self._abort = False
+
+    def run(self) -> None:
+        try:
+            total = len(self._devices)
+            depth_label = self._config.depth.value.upper()
+            vuln_total = total if self._vuln_scan else 0
+            grand_total = total + vuln_total
+
+            for i, device in enumerate(self._devices):
+                if self._abort:
+                    return
+
+                pct = int((i / grand_total) * 100) if grand_total else 0
+                self.progress.emit(
+                    f"{depth_label} scan {device.ip} ({i+1}/{total})...", pct
+                )
+
+                detailed = self._scanner.scan_host(device.ip)
+
+                # Merge data
+                device.services = detailed.services
+                device.open_ports = detailed.open_ports
+                device.os_name = detailed.os_name
+                device.os_version = detailed.os_version
+                device.os_accuracy = detailed.os_accuracy
+                device.scan_depth = detailed.scan_depth
+
+                if detailed.mac:
+                    device.mac = detailed.mac
+                if detailed.vendor:
+                    device.vendor = detailed.vendor
+                if detailed.hostname:
+                    device.hostname = detailed.hostname
+
+                self._classifier.classify(device)
+                device.update_risk_level()
+                self.host_updated.emit(device)
+
+            # Optional vuln scan phase
+            if self._vuln_scan and not self._abort:
+                vuln_scanner = VulnerabilityScanner(timeout=self._config.host_timeout)
+                if self._config.vulners_api_key:
+                    vuln_scanner.init_vulners(self._config.vulners_api_key)
+
+                for i, device in enumerate(self._devices):
+                    if self._abort:
+                        return
+
+                    pct = int(((total + i) / grand_total) * 100) if grand_total else 0
+                    self.progress.emit(
+                        f"Vuln scan {device.ip} ({i+1}/{total})...", pct
+                    )
+                    vulns = vuln_scanner.scan_device(device)
+                    for v in vulns:
+                        self.vuln_found.emit(v)
+
+            self.progress.emit("Scan complete", 100)
+            self.finished.emit()
+
+        except Exception as e:
+            log.error(f"Host scan worker error: {e}")
+            self.error.emit(str(e))
+
+    def abort(self) -> None:
+        self._abort = True
+
+
 class UpdateWorker(QThread):
     """Worker thread for database updates."""
     progress = Signal(str, int)

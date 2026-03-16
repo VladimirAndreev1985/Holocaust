@@ -60,7 +60,7 @@ class MetasploitTab(QWidget):
         conn_layout.addWidget(QLabel(tr("Password:")))
         self._pass_input = QLineEdit("msf")
         self._pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self._pass_input.setMaximumWidth(150)
+        self._pass_input.setMaximumWidth(200)
         conn_layout.addWidget(self._pass_input)
 
         conn_layout.addStretch()

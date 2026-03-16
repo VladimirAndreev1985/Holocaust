@@ -6,8 +6,8 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QMainWindow, QTabWidget, QSplitter, QStatusBar,
-    QProgressBar, QLabel, QVBoxLayout, QWidget, QMessageBox,
-    QDockWidget, QScrollArea,
+    QProgressBar, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox,
+    QDockWidget, QScrollArea, QPushButton, QMenu,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
 from PySide6.QtGui import QFont, QAction
@@ -26,13 +26,14 @@ from gui.widgets.detail_panel import DetailPanel
 from gui.widgets.log_panel import LogPanel
 from gui.widgets.device_card import DeviceCard
 from models.device import Device, DeviceType
-from models.scan_config import ScanConfig
+from models.scan_config import ScanConfig, ScanDepth
 from models.vulnerability import Vulnerability
 from modules.metasploit_bridge import MetasploitBridge
 from reports.generator import ReportGenerator
 from workers.scan_workers import (
     DiscoveryWorker, FullScanWorker, VulnScanWorker,
     CameraAuditWorker, PcAuditWorker, UpdateWorker,
+    HostScanWorker,
 )
 
 log = get_logger("main_window")
@@ -54,26 +55,38 @@ class MainWindow(QMainWindow):
         self._devices: dict[str, Device] = {}
         self._vulns: list[Vulnerability] = []
 
+        # Device cards index (ip -> card widget)
+        self._device_cards: dict[str, DeviceCard] = {}
+        # Selected devices for batch operations
+        self._selected_devices: set[str] = set()
+
         # Workers
         self._scan_worker: FullScanWorker | None = None
         self._vuln_worker: VulnScanWorker | None = None
+        self._host_worker: HostScanWorker | None = None
         self._update_worker: UpdateWorker | None = None
 
         self._setup_ui()
         self._connect_signals()
         self._init_state()
 
-    def _build_scan_config(self) -> ScanConfig:
-        """Build ScanConfig from current settings + dashboard options."""
+    def _build_scan_config(self, depth: ScanDepth | None = None) -> ScanConfig:
+        """Build ScanConfig from current settings + dashboard options.
+
+        If depth is provided, use it (for context menu actions).
+        Otherwise take from dashboard combo.
+        """
         settings = self._settings_tab.get_settings()
         config = ScanConfig.from_settings(settings)
 
-        # Override depth/auto from dashboard (live controls take priority)
-        from models.scan_config import ScanDepth
-        try:
-            config.depth = ScanDepth(self._dashboard.scan_depth)
-        except ValueError:
-            pass
+        if depth:
+            config.depth = depth
+        else:
+            try:
+                config.depth = ScanDepth(self._dashboard.scan_depth)
+            except ValueError:
+                pass
+
         config.auto_vuln_scan = self._dashboard.auto_vuln_scan
         config.auto_report = self._dashboard.auto_report
 
@@ -96,12 +109,64 @@ class MainWindow(QMainWindow):
         sidebar.setMaximumWidth(350)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(5, 5, 5, 5)
+        sidebar_layout.setSpacing(4)
 
         sidebar_title = QLabel(tr("Targets"))
         sidebar_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         sidebar_title.setStyleSheet("color: #8ca8c4; padding: 5px;")
         sidebar_layout.addWidget(sidebar_title)
 
+        # === Action toolbar ===
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(4)
+
+        self._select_all_btn = QPushButton(tr("All"))
+        self._select_all_btn.setFixedHeight(26)
+        self._select_all_btn.setToolTip(tr("Select / deselect all"))
+        self._select_all_btn.setStyleSheet(self._toolbar_btn_style())
+        self._select_all_btn.clicked.connect(self._toggle_select_all)
+        toolbar.addWidget(self._select_all_btn)
+
+        # Batch scan button with dropdown
+        self._batch_scan_btn = QPushButton(tr("Scan"))
+        self._batch_scan_btn.setFixedHeight(26)
+        self._batch_scan_btn.setToolTip(tr("Scan selected devices"))
+        self._batch_scan_btn.setStyleSheet(self._toolbar_btn_style())
+        batch_scan_menu = QMenu(self._batch_scan_btn)
+        batch_scan_menu.setStyleSheet(self._menu_style())
+        batch_scan_menu.addAction(tr("Quick Scan"), lambda: self._batch_scan(ScanDepth.QUICK))
+        batch_scan_menu.addAction(tr("Standard Scan"), lambda: self._batch_scan(ScanDepth.STANDARD))
+        batch_scan_menu.addAction(tr("Deep Scan"), lambda: self._batch_scan(ScanDepth.DEEP))
+        batch_scan_menu.addSeparator()
+        batch_scan_menu.addAction(tr("Vulnerability Scan"), self._batch_vuln_scan)
+        self._batch_scan_btn.setMenu(batch_scan_menu)
+        toolbar.addWidget(self._batch_scan_btn)
+
+        self._batch_msf_btn = QPushButton(tr("MSF"))
+        self._batch_msf_btn.setFixedHeight(26)
+        self._batch_msf_btn.setToolTip(tr("Send selected to Metasploit"))
+        self._batch_msf_btn.setStyleSheet(self._toolbar_btn_style())
+        self._batch_msf_btn.clicked.connect(self._batch_send_to_msf)
+        toolbar.addWidget(self._batch_msf_btn)
+
+        self._batch_remove_btn = QPushButton(tr("Del"))
+        self._batch_remove_btn.setFixedHeight(26)
+        self._batch_remove_btn.setToolTip(tr("Remove selected from results"))
+        self._batch_remove_btn.setStyleSheet(self._toolbar_btn_style("#a05050"))
+        self._batch_remove_btn.clicked.connect(self._batch_remove)
+        toolbar.addWidget(self._batch_remove_btn)
+
+        # Selection count label
+        self._selection_label = QLabel("0")
+        self._selection_label.setFixedWidth(30)
+        self._selection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._selection_label.setStyleSheet("color: #5a7ea0; font-weight: bold; font-size: 12px;")
+        self._selection_label.setToolTip(tr("Selected devices"))
+        toolbar.addWidget(self._selection_label)
+
+        sidebar_layout.addLayout(toolbar)
+
+        # Device list scroll area
         self._device_list_area = QScrollArea()
         self._device_list_area.setWidgetResizable(True)
         self._device_list_widget = QWidget()
@@ -171,6 +236,47 @@ class MainWindow(QMainWindow):
         self._msf_status_label.setStyleSheet("color: #a05050;")
         self._statusbar.addPermanentWidget(self._msf_status_label)
 
+    @staticmethod
+    def _toolbar_btn_style(color: str = "#5a7ea0") -> str:
+        return f"""
+            QPushButton {{
+                background-color: #1c1c24;
+                color: {color};
+                border: 1px solid #303040;
+                border-radius: 3px;
+                padding: 2px 8px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: #252530;
+                border-color: {color};
+            }}
+            QPushButton::menu-indicator {{
+                width: 10px;
+                subcontrol-position: right center;
+            }}
+        """
+
+    @staticmethod
+    def _menu_style() -> str:
+        return """
+            QMenu {
+                background-color: #1c1c24;
+                border: 1px solid #303040;
+                color: #b0b0b8;
+                padding: 4px;
+            }
+            QMenu::item:selected {
+                background-color: #2a2a38;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #303040;
+                margin: 4px 8px;
+            }
+        """
+
     def _connect_signals(self) -> None:
         # Connect log emitter
         emitter = get_emitter()
@@ -181,6 +287,15 @@ class MainWindow(QMainWindow):
         self._dashboard.scan_requested.connect(self._start_full_scan)
         self._dashboard.device_selected.connect(self._on_device_selected)
         self._dashboard.device_inspect.connect(self._on_device_inspect)
+
+        # Network graph context menu signals
+        graph = self._dashboard.network_graph
+        graph.device_scan_quick.connect(lambda d: self._scan_single_host(d, ScanDepth.QUICK))
+        graph.device_scan_standard.connect(lambda d: self._scan_single_host(d, ScanDepth.STANDARD))
+        graph.device_scan_deep.connect(lambda d: self._scan_single_host(d, ScanDepth.DEEP))
+        graph.device_vuln_scan.connect(lambda d: self._start_vuln_scan([d]))
+        graph.device_send_to_msf.connect(self._send_device_to_msf)
+        graph.device_remove.connect(self._remove_device)
 
         # Interfaces
         self._interfaces.interface_up.connect(
@@ -308,6 +423,9 @@ class MainWindow(QMainWindow):
         self._devices[device.ip] = device
         self._dashboard.update_device(device)
         self._lan.update_device(device)
+        # Update card in sidebar
+        if device.ip in self._device_cards:
+            self._device_cards[device.ip].update_device(device)
 
     @Slot(object)
     def _on_scan_finished(self, result) -> None:
@@ -333,6 +451,48 @@ class MainWindow(QMainWindow):
         self._progress.setVisible(False)
         self._dashboard.set_scan_enabled(True)
         QMessageBox.critical(self, tr("Scan Error"), error)
+
+    # === Single host / batch host scan ===
+
+    def _scan_single_host(self, device: Device, depth: ScanDepth) -> None:
+        """Rescan a single device at a specific depth."""
+        self._scan_hosts([device], depth)
+
+    def _scan_hosts(self, devices: list[Device], depth: ScanDepth,
+                    vuln_scan: bool = False) -> None:
+        """Scan a list of hosts at a specific depth."""
+        if self._host_worker and self._host_worker.isRunning():
+            QMessageBox.warning(self, tr("Scan Running"), tr("A host scan is already in progress."))
+            return
+
+        config = self._build_scan_config(depth)
+        ips = ", ".join(d.ip for d in devices[:3])
+        if len(devices) > 3:
+            ips += f" (+{len(devices) - 3})"
+        log.info(f"Rescanning {len(devices)} host(s) at {depth.value}: {ips}")
+
+        self._progress.setVisible(True)
+        self._progress.setValue(0)
+        self._status_label.setText(
+            tr("Scanning {count} host(s)...").format(count=len(devices))
+        )
+
+        self._host_worker = HostScanWorker(devices, config, vuln_scan=vuln_scan)
+        self._host_worker.progress.connect(self._on_scan_progress)
+        self._host_worker.host_updated.connect(self._on_host_updated)
+        self._host_worker.vuln_found.connect(self._on_vuln_found)
+        self._host_worker.finished.connect(self._on_host_scan_finished)
+        self._host_worker.error.connect(self._on_scan_error)
+        self._host_worker.start()
+
+    @Slot()
+    def _on_host_scan_finished(self) -> None:
+        self._status_label.setText(tr("Host scan complete"))
+        self._progress.setVisible(False)
+
+        critical = sum(1 for v in self._vulns
+                       if v.severity.value in ("critical", "high"))
+        self._dashboard.set_vuln_count(len(self._vulns), critical)
 
     # === Vuln scan ===
 
@@ -385,7 +545,115 @@ class MainWindow(QMainWindow):
         card = DeviceCard(device)
         card.clicked.connect(self._on_device_selected)
         card.double_clicked.connect(self._on_device_inspect)
+
+        # Context menu signals from card
+        card.scan_quick.connect(lambda d: self._scan_single_host(d, ScanDepth.QUICK))
+        card.scan_standard.connect(lambda d: self._scan_single_host(d, ScanDepth.STANDARD))
+        card.scan_deep.connect(lambda d: self._scan_single_host(d, ScanDepth.DEEP))
+        card.vuln_scan.connect(lambda d: self._start_vuln_scan([d]))
+        card.send_to_msf.connect(self._send_device_to_msf)
+        card.remove_device.connect(self._remove_device)
+        card.selection_changed.connect(self._on_card_selection_changed)
+
+        self._device_cards[device.ip] = card
         self._device_list_layout.addWidget(card)
+
+    def _send_device_to_msf(self, device: Device) -> None:
+        """Switch to Metasploit tab with device IP pre-filled."""
+        self._msf_tab.set_exploit_target(device.ip)
+        self._tabs.setCurrentWidget(self._msf_tab)
+        log.info(f"Sent {device.ip} to Metasploit tab")
+
+    def _remove_device(self, device: Device) -> None:
+        """Remove a device from all views and internal storage."""
+        ip = device.ip
+
+        # Remove from storage
+        self._devices.pop(ip, None)
+        self._selected_devices.discard(ip)
+
+        # Remove from sidebar
+        card = self._device_cards.pop(ip, None)
+        if card:
+            self._device_list_layout.removeWidget(card)
+            card.deleteLater()
+
+        # Remove from graph
+        self._dashboard.network_graph.remove_device(ip)
+
+        # Update stats
+        self._host_count_label.setText(tr("Hosts: {count}").format(count=len(self._devices)))
+        self._update_selection_label()
+
+        log.info(f"Removed device {ip} from results")
+
+    # === Multi-select / batch operations ===
+
+    def _on_card_selection_changed(self, device: Device, selected: bool) -> None:
+        if selected:
+            self._selected_devices.add(device.ip)
+        else:
+            self._selected_devices.discard(device.ip)
+        self._update_selection_label()
+
+    def _update_selection_label(self) -> None:
+        count = len(self._selected_devices)
+        self._selection_label.setText(str(count))
+        self._selection_label.setToolTip(
+            tr("{count} device(s) selected").format(count=count)
+        )
+
+    def _toggle_select_all(self) -> None:
+        """Toggle select all / deselect all."""
+        if self._selected_devices:
+            # Deselect all
+            for card in self._device_cards.values():
+                card.set_selected(False)
+            self._selected_devices.clear()
+        else:
+            # Select all
+            for ip, card in self._device_cards.items():
+                card.set_selected(True)
+                self._selected_devices.add(ip)
+        self._update_selection_label()
+
+    def _get_selected_devices(self) -> list[Device]:
+        """Return list of selected Device objects."""
+        return [self._devices[ip] for ip in self._selected_devices if ip in self._devices]
+
+    def _batch_scan(self, depth: ScanDepth) -> None:
+        devices = self._get_selected_devices()
+        if not devices:
+            QMessageBox.information(self, tr("No Selection"),
+                                   tr("Select devices first (checkboxes in sidebar)."))
+            return
+        self._scan_hosts(devices, depth)
+
+    def _batch_vuln_scan(self) -> None:
+        devices = self._get_selected_devices()
+        if not devices:
+            QMessageBox.information(self, tr("No Selection"),
+                                   tr("Select devices first (checkboxes in sidebar)."))
+            return
+        self._start_vuln_scan(devices)
+
+    def _batch_send_to_msf(self) -> None:
+        devices = self._get_selected_devices()
+        if not devices:
+            QMessageBox.information(self, tr("No Selection"),
+                                   tr("Select devices first (checkboxes in sidebar)."))
+            return
+        # Send first selected device, fill RHOSTS with all IPs
+        ips = " ".join(d.ip for d in devices)
+        self._msf_tab.set_exploit_target(ips)
+        self._tabs.setCurrentWidget(self._msf_tab)
+
+    def _batch_remove(self) -> None:
+        devices = self._get_selected_devices()
+        if not devices:
+            return
+        for device in list(devices):
+            self._remove_device(device)
 
     # === Metasploit ===
 
@@ -477,7 +745,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         # Cleanup workers
-        for worker in [self._scan_worker, self._vuln_worker, self._update_worker]:
+        for worker in [self._scan_worker, self._vuln_worker,
+                       self._host_worker, self._update_worker]:
             if worker and worker.isRunning():
                 worker.abort()
                 worker.wait(3000)

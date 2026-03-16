@@ -886,6 +886,73 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
 
     # ============================================================
+    #  Context Menu & Batch Actions
+    # ============================================================
+    "Rescan Host": {
+        "ru": "Пересканировать хост",
+    },
+    "Vulnerability Scan": {
+        "ru": "Сканирование уязвимостей",
+    },
+    "Send to Metasploit": {
+        "ru": "Отправить в Metasploit",
+    },
+    "Copy IP": {
+        "ru": "Копировать IP",
+    },
+    "Copy MAC": {
+        "ru": "Копировать MAC",
+    },
+    "View Details": {
+        "ru": "Подробности",
+    },
+    "Remove from Results": {
+        "ru": "Удалить из результатов",
+    },
+    "Select / deselect all": {
+        "ru": "Выделить / снять выделение",
+    },
+    "Scan selected devices": {
+        "ru": "Сканировать выбранные устройства",
+    },
+    "Send selected to Metasploit": {
+        "ru": "Отправить выбранные в Metasploit",
+    },
+    "Remove selected from results": {
+        "ru": "Удалить выбранные из результатов",
+    },
+    "Selected devices": {
+        "ru": "Выбранные устройства",
+    },
+    "All": {
+        "ru": "Все",
+    },
+    "Scan": {
+        "ru": "Скан",
+    },
+    "Del": {
+        "ru": "Удл",
+    },
+    "No Selection": {
+        "ru": "Ничего не выбрано",
+    },
+    "Select devices first (checkboxes in sidebar).": {
+        "ru": "Сначала выберите устройства (чекбоксы в боковой панели).",
+    },
+    "A host scan is already in progress.": {
+        "ru": "Сканирование хоста уже выполняется.",
+    },
+    "Host scan complete": {
+        "ru": "Сканирование хостов завершено",
+    },
+    "Scanning {count} host(s)...": {
+        "ru": "Сканирование {count} хост(ов)...",
+    },
+    "{count} device(s) selected": {
+        "ru": "{count} устройств выбрано",
+    },
+
+    # ============================================================
     #  Restart notice
     # ============================================================
     "Language changed. Restart the application to apply.": {
