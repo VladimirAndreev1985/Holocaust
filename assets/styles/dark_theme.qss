@@ -161,6 +161,8 @@ QLineEdit, QTextEdit, QPlainTextEdit {
     border: 1px solid #2a2a4a;
     border-radius: 4px;
     padding: 8px;
+    min-height: 20px;
+    font-size: 13px;
     selection-background-color: #e94560;
 }
 
@@ -174,6 +176,8 @@ QComboBox {
     border: 1px solid #2a2a4a;
     border-radius: 4px;
     padding: 6px 12px;
+    min-height: 24px;
+    font-size: 13px;
 }
 
 QComboBox:hover {
@@ -190,6 +194,13 @@ QComboBox QAbstractItemView {
     border: 1px solid #2a2a4a;
     selection-background-color: #2a1a3e;
     selection-color: #e94560;
+    font-size: 13px;
+    min-height: 24px;
+}
+
+QComboBox QAbstractItemView::item {
+    min-height: 28px;
+    padding: 4px 8px;
 }
 
 QSpinBox {
@@ -198,6 +209,8 @@ QSpinBox {
     border: 1px solid #2a2a4a;
     border-radius: 4px;
     padding: 6px;
+    min-height: 24px;
+    font-size: 13px;
 }
 
 /* === Scroll Bars === */
@@ -272,6 +285,12 @@ QSplitter::handle:vertical {
 
 QSplitter::handle:horizontal {
     width: 3px;
+}
+
+/* === Form Layout === */
+QFormLayout QLabel {
+    min-height: 24px;
+    font-size: 13px;
 }
 
 /* === Group Box === */
