@@ -228,6 +228,11 @@ class DashboardTab(QWidget):
         self._update_stats()
 
     def update_device(self, device: Device) -> None:
+        # Replace old device object in list so stats reflect updated type
+        for i, d in enumerate(self._devices):
+            if d.ip == device.ip:
+                self._devices[i] = device
+                break
         self.network_graph.update_device(device)
         self._update_stats()
 
