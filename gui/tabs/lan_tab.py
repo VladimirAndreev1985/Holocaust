@@ -69,7 +69,7 @@ class LanTab(QWidget):
         self._filter_combo.addItem(tr("PCs (Linux)"), DeviceType.PC_LINUX)
         self._filter_combo.addItem(tr("PCs (Mac)"), DeviceType.PC_MAC)
         self._filter_combo.addItem(tr("Servers"), DeviceType.SERVER)
-        self._filter_combo.addItem(tr("Phones"), "phones")
+        self._filter_combo.addItem(tr("Phones"), "phones")  # handled as special case in _apply_filters
         self._filter_combo.addItem(tr("Routers"), DeviceType.ROUTER)
         self._filter_combo.addItem(tr("IoT"), DeviceType.IOT)
         self._filter_combo.addItem(tr("Printers"), DeviceType.PRINTER)

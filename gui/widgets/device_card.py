@@ -115,7 +115,7 @@ class DeviceCard(QFrame):
                         sub_item.widget().deleteLater()
 
     def _build_content(self) -> None:
-        """Populate the existing layout with widgets. Safe to call multiple times."""
+        """Populate the existing layout with widgets. Only called once."""
         # Checkbox for multi-select
         self._checkbox = QCheckBox()
         self._checkbox.setFixedSize(18, 18)
@@ -130,41 +130,45 @@ class DeviceCard(QFrame):
 
         # Icon (colored by device type — matches graph node colors)
         type_color = DEVICE_COLORS.get(self.device.device_type, "#484850")
-        icon_label = QLabel(DEVICE_ICONS.get(self.device.device_type, "?"))
-        icon_label.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
-        icon_label.setFixedSize(40, 40)
-        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon_label.setStyleSheet(f"""
+        self._icon_label = QLabel(DEVICE_ICONS.get(self.device.device_type, "?"))
+        self._icon_label.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        self._icon_label.setFixedSize(40, 40)
+        self._icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._icon_label.setStyleSheet(f"""
             background-color: {type_color};
             color: white;
             border-radius: 20px;
         """)
-        self._layout.addWidget(icon_label)
+        self._layout.addWidget(self._icon_label)
 
         # Info
         info_layout = QVBoxLayout()
         info_layout.setSpacing(2)
 
-        name = QLabel(self.device.display_name)
-        name.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        name.setStyleSheet("color: #b0b0b8; border: none; background: transparent;")
+        display_name = self.device.display_name
+        if len(display_name) > 30:
+            display_name = display_name[:27] + "..."
 
-        details = QLabel(
+        self._name_label = QLabel(display_name)
+        self._name_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._name_label.setStyleSheet("color: #b0b0b8; border: none; background: transparent;")
+
+        self._details_label = QLabel(
             f"{self.device.ip}  |  "
             f"{self.device.device_type.value}  |  "
             f"{tr('{ports} ports').format(ports=len(self.device.open_ports))}"
         )
-        details.setStyleSheet("color: #606070; font-size: 11px; border: none; background: transparent;")
+        self._details_label.setStyleSheet("color: #606070; font-size: 11px; border: none; background: transparent;")
 
         risk_text = tr("Risk: {level}").format(level=self.device.risk_level.value.upper())
         if self.device.vulnerabilities:
             risk_text += " " + tr("({count} vulns)").format(count=len(self.device.vulnerabilities))
-        risk_label = QLabel(risk_text)
-        risk_label.setStyleSheet(f"color: {self.device.risk_level.color}; font-size: 11px; border: none; background: transparent;")
+        self._risk_label = QLabel(risk_text)
+        self._risk_label.setStyleSheet(f"color: {self.device.risk_level.color}; font-size: 11px; border: none; background: transparent;")
 
-        info_layout.addWidget(name)
-        info_layout.addWidget(details)
-        info_layout.addWidget(risk_label)
+        info_layout.addWidget(self._name_label)
+        info_layout.addWidget(self._details_label)
+        info_layout.addWidget(self._risk_label)
         self._layout.addLayout(info_layout, 1)
 
     def _on_checkbox_toggled(self, checked: bool) -> None:
@@ -228,10 +232,32 @@ class DeviceCard(QFrame):
         super().mouseDoubleClickEvent(event)
 
     def update_device(self, device: Device, flash: bool = False) -> None:
-        """Update card with new device data. Preserves selection state."""
+        """Update card with new device data — update labels only (no rebuild)."""
         self.device = device
-        self._clear_layout()
-        self._build_content()
+
+        # Update icon
+        type_color = DEVICE_COLORS.get(device.device_type, "#484850")
+        self._icon_label.setText(DEVICE_ICONS.get(device.device_type, "?"))
+        self._icon_label.setStyleSheet(f"background-color: {type_color}; color: white; border-radius: 20px;")
+
+        # Update text labels
+        display_name = device.display_name
+        if len(display_name) > 30:
+            display_name = display_name[:27] + "..."
+        self._name_label.setText(display_name)
+
+        self._details_label.setText(
+            f"{device.ip}  |  "
+            f"{device.device_type.value}  |  "
+            f"{tr('{ports} ports').format(ports=len(device.open_ports))}"
+        )
+
+        risk_text = tr("Risk: {level}").format(level=device.risk_level.value.upper())
+        if device.vulnerabilities:
+            risk_text += " " + tr("({count} vulns)").format(count=len(device.vulnerabilities))
+        self._risk_label.setText(risk_text)
+        self._risk_label.setStyleSheet(f"color: {device.risk_level.color}; font-size: 11px; border: none; background: transparent;")
+
         self._apply_style()
         if flash:
             self._flash_highlight()

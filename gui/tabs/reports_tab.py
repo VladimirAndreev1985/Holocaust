@@ -83,10 +83,9 @@ class ReportsTab(QWidget):
                 self._preview.setPlainText(tr("Report generated at: {path}").format(path=path))
 
     def _open_folder(self) -> None:
-        import subprocess
+        import sys
         reports_dir = Path("reports_output")
         reports_dir.mkdir(exist_ok=True)
-        try:
-            subprocess.Popen(["xdg-open", str(reports_dir)])
-        except FileNotFoundError:
-            subprocess.Popen(["open", str(reports_dir)])
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(reports_dir.resolve())))

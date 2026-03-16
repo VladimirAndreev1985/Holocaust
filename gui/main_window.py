@@ -7,10 +7,10 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QMainWindow, QTabWidget, QSplitter, QStatusBar,
     QProgressBar, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QMessageBox,
-    QDockWidget, QScrollArea, QPushButton, QMenu,
+    QDockWidget, QScrollArea, QPushButton, QMenu, QMenuBar, QFileDialog,
 )
 from PySide6.QtCore import Qt, Slot, QTimer
-from PySide6.QtGui import QFont, QAction
+from PySide6.QtGui import QFont, QAction, QKeySequence
 
 from core.i18n import tr
 from core.interface_manager import InterfaceManager
@@ -22,6 +22,7 @@ from gui.tabs.vulns_tab import VulnsTab
 from gui.tabs.metasploit_tab import MetasploitTab
 from gui.tabs.reports_tab import ReportsTab
 from gui.tabs.settings_tab import SettingsTab
+from gui.tabs.attack_tab import AttackTab
 from gui.widgets.detail_panel import DetailPanel
 from gui.widgets.log_panel import LogPanel
 from gui.widgets.device_card import DeviceCard
@@ -34,6 +35,10 @@ from workers.scan_workers import (
     DiscoveryWorker, FullScanWorker, VulnScanWorker,
     CameraAuditWorker, PcAuditWorker, UpdateWorker,
     HostScanWorker,
+)
+from workers.attack_workers import (
+    ArpSpoofWorker, DeauthWorker, HandshakeWorker, WpsWorker,
+    WebScanWorker, PayloadGenWorker, BruteForceWorker,
 )
 
 log = get_logger("main_window")
@@ -66,10 +71,211 @@ class MainWindow(QMainWindow):
         self._host_worker: HostScanWorker | None = None
         self._host_scan_ips: list[str] = []
         self._update_worker: UpdateWorker | None = None
+        self._scanning = False
+
+        # Attack workers
+        self._arp_worker: ArpSpoofWorker | None = None
+        self._deauth_worker: DeauthWorker | None = None
+        self._handshake_worker: HandshakeWorker | None = None
+        self._wps_worker: WpsWorker | None = None
+        self._web_scan_worker: WebScanWorker | None = None
+        self._payload_worker: PayloadGenWorker | None = None
+        self._brute_worker: BruteForceWorker | None = None
 
         self._setup_ui()
         self._connect_signals()
         self._init_state()
+
+    def _setup_menubar(self) -> None:
+        """Create main menu bar with keyboard shortcuts."""
+        menubar = self.menuBar()
+
+        # === File ===
+        file_menu = menubar.addMenu(tr("&File"))
+
+        export_csv = QAction(tr("Export Results (CSV)"), self)
+        export_csv.setShortcut(QKeySequence("Ctrl+E"))
+        export_csv.triggered.connect(self._export_csv)
+        file_menu.addAction(export_csv)
+
+        file_menu.addSeparator()
+
+        quit_action = QAction(tr("Quit"), self)
+        quit_action.setShortcut(QKeySequence("Ctrl+Q"))
+        quit_action.triggered.connect(self.close)
+        file_menu.addAction(quit_action)
+
+        # === Scan ===
+        scan_menu = menubar.addMenu(tr("&Scan"))
+
+        quick_scan = QAction(tr("Quick Scan"), self)
+        quick_scan.setShortcut(QKeySequence("Ctrl+1"))
+        quick_scan.triggered.connect(lambda: self._menu_scan(ScanDepth.QUICK))
+        scan_menu.addAction(quick_scan)
+
+        std_scan = QAction(tr("Standard Scan"), self)
+        std_scan.setShortcut(QKeySequence("Ctrl+2"))
+        std_scan.triggered.connect(lambda: self._menu_scan(ScanDepth.STANDARD))
+        scan_menu.addAction(std_scan)
+
+        deep_scan = QAction(tr("Deep Scan"), self)
+        deep_scan.setShortcut(QKeySequence("Ctrl+3"))
+        deep_scan.triggered.connect(lambda: self._menu_scan(ScanDepth.DEEP))
+        scan_menu.addAction(deep_scan)
+
+        scan_menu.addSeparator()
+
+        vuln_scan = QAction(tr("Vuln Scan Selected"), self)
+        vuln_scan.setShortcut(QKeySequence("Ctrl+V"))
+        vuln_scan.triggered.connect(self._batch_vuln_scan)
+        scan_menu.addAction(vuln_scan)
+
+        scan_menu.addSeparator()
+
+        stop_scan = QAction(tr("Stop Scan"), self)
+        stop_scan.setShortcut(QKeySequence("Escape"))
+        stop_scan.triggered.connect(self._stop_full_scan)
+        scan_menu.addAction(stop_scan)
+
+        # === Attack ===
+        attack_menu = menubar.addMenu(tr("&Attack"))
+
+        mitm_action = QAction(tr("MITM Attack"), self)
+        mitm_action.triggered.connect(lambda: (
+            self._tabs.setCurrentWidget(self._attack_tab),
+            self._attack_tab.switch_to_mitm(),
+        ))
+        attack_menu.addAction(mitm_action)
+
+        wifi_action = QAction(tr("WiFi Attacks"), self)
+        wifi_action.triggered.connect(lambda: (
+            self._tabs.setCurrentWidget(self._attack_tab),
+            self._attack_tab.switch_to_wifi(),
+        ))
+        attack_menu.addAction(wifi_action)
+
+        web_scan_action = QAction(tr("Web Scan"), self)
+        web_scan_action.triggered.connect(lambda: (
+            self._tabs.setCurrentWidget(self._attack_tab),
+            self._attack_tab.switch_to_web(),
+        ))
+        attack_menu.addAction(web_scan_action)
+
+        payload_action = QAction(tr("Generate Payload"), self)
+        payload_action.triggered.connect(lambda: (
+            self._tabs.setCurrentWidget(self._attack_tab),
+            self._attack_tab.switch_to_payloads(),
+        ))
+        attack_menu.addAction(payload_action)
+
+        brute_action = QAction(tr("Brute-Force"), self)
+        brute_action.triggered.connect(lambda: (
+            self._tabs.setCurrentWidget(self._attack_tab),
+            self._attack_tab.switch_to_brute(),
+        ))
+        attack_menu.addAction(brute_action)
+
+        attack_menu.addSeparator()
+
+        send_msf = QAction(tr("Send Selected to Metasploit"), self)
+        send_msf.setShortcut(QKeySequence("Ctrl+M"))
+        send_msf.triggered.connect(self._batch_send_to_msf)
+        attack_menu.addAction(send_msf)
+
+        # === View ===
+        view_menu = menubar.addMenu(tr("&View"))
+
+        select_all = QAction(tr("Select All / None"), self)
+        select_all.setShortcut(QKeySequence("Ctrl+A"))
+        select_all.triggered.connect(self._toggle_select_all)
+        view_menu.addAction(select_all)
+
+        refresh = QAction(tr("Refresh Interfaces"), self)
+        refresh.setShortcut(QKeySequence("F5"))
+        refresh.triggered.connect(self._refresh_interfaces)
+        view_menu.addAction(refresh)
+
+        view_menu.addSeparator()
+
+        # Tab shortcuts
+        for i, name in enumerate([tr("Dashboard"), tr("Interfaces"), tr("LAN Scanner"),
+                                   tr("Vulnerabilities"), tr("Attack"), tr("Metasploit"),
+                                   tr("Reports"), tr("Settings")]):
+            action = QAction(name, self)
+            if i < 9:
+                action.setShortcut(QKeySequence(f"Alt+{i + 1}"))
+            action.triggered.connect(lambda _, idx=i: self._tabs.setCurrentIndex(idx))
+            view_menu.addAction(action)
+
+        # === Reports ===
+        reports_menu = menubar.addMenu(tr("&Reports"))
+
+        gen_html = QAction(tr("Generate HTML Report"), self)
+        gen_html.setShortcut(QKeySequence("Ctrl+R"))
+        gen_html.triggered.connect(self._generate_html_report)
+        reports_menu.addAction(gen_html)
+
+        gen_pdf = QAction(tr("Generate PDF Report"), self)
+        gen_pdf.triggered.connect(self._generate_pdf_report)
+        reports_menu.addAction(gen_pdf)
+
+        # === Help ===
+        help_menu = menubar.addMenu(tr("&Help"))
+
+        about = QAction(tr("About Holocaust"), self)
+        about.triggered.connect(lambda: QMessageBox.about(
+            self, tr("About"),
+            tr("Holocaust Network Auditor\n\n"
+               "Professional network reconnaissance,\n"
+               "vulnerability assessment, and exploitation tool.\n\n"
+               "For authorized security testing only.")
+        ))
+        help_menu.addAction(about)
+
+    def _menu_scan(self, depth: ScanDepth) -> None:
+        """Start a scan from the menu bar."""
+        target = self._dashboard._target_input.text().strip()
+        if not target:
+            target = self._get_default_target()
+        self._dashboard._depth_combo.setCurrentIndex(
+            [ScanDepth.QUICK, ScanDepth.STANDARD, ScanDepth.DEEP].index(depth)
+        )
+        self._start_full_scan(target)
+
+    def _export_csv(self) -> None:
+        """Export current scan results to CSV."""
+        if not self._devices:
+            QMessageBox.information(self, tr("No Data"), tr("No devices to export."))
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, tr("Export CSV"), "holocaust_results.csv",
+            tr("CSV Files (*.csv)")
+        )
+        if not path:
+            return
+
+        import csv
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(["IP", "Hostname", "MAC", "Vendor", "Type", "OS",
+                                 "Open Ports", "Services", "Vulns", "Risk"])
+                for device in self._devices.values():
+                    ports = ", ".join(str(p) for p in device.open_ports)
+                    services = ", ".join(f"{s.port}/{s.name}" for s in device.services)
+                    writer.writerow([
+                        device.ip, device.hostname or "", device.mac,
+                        device.vendor or "", device.device_type.value,
+                        f"{device.os_name} {device.os_version}".strip(),
+                        ports, services, len(device.vulnerabilities),
+                        device.risk_level.value,
+                    ])
+
+            log.info(f"Exported {len(self._devices)} devices to {path}")
+            self._status_label.setText(tr("Exported to {path}").format(path=path))
+        except Exception as e:
+            QMessageBox.critical(self, tr("Export Failed"), str(e))
 
     def _build_scan_config(self, depth: ScanDepth | None = None) -> ScanConfig:
         """Build ScanConfig from current settings + dashboard options.
@@ -94,6 +300,8 @@ class MainWindow(QMainWindow):
         return config
 
     def _setup_ui(self) -> None:
+        self._setup_menubar()
+
         # Central widget with splitter
         central = QWidget()
         self.setCentralWidget(central)
@@ -159,7 +367,7 @@ class MainWindow(QMainWindow):
 
         # Selection count label
         self._selection_label = QLabel("0")
-        self._selection_label.setFixedWidth(30)
+        self._selection_label.setMinimumWidth(30)
         self._selection_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._selection_label.setStyleSheet("color: #5a7ea0; font-weight: bold; font-size: 12px;")
         self._selection_label.setToolTip(tr("Selected devices"))
@@ -236,6 +444,7 @@ class MainWindow(QMainWindow):
         self._interfaces = InterfacesTab()
         self._lan = LanTab()
         self._vulns_tab = VulnsTab()
+        self._attack_tab = AttackTab()
         self._msf_tab = MetasploitTab()
         self._reports_tab = ReportsTab()
         self._settings_tab = SettingsTab()
@@ -244,6 +453,7 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._interfaces, tr("Interfaces & Wi-Fi"))
         self._tabs.addTab(self._lan, tr("LAN Scanner"))
         self._tabs.addTab(self._vulns_tab, tr("Vulnerabilities"))
+        self._tabs.addTab(self._attack_tab, tr("Attack"))
         self._tabs.addTab(self._msf_tab, tr("Metasploit"))
         self._tabs.addTab(self._reports_tab, tr("Reports"))
         self._tabs.addTab(self._settings_tab, tr("Settings"))
@@ -336,6 +546,8 @@ class MainWindow(QMainWindow):
         # Dashboard
         self._dashboard.scan_requested.connect(self._start_full_scan)
         self._dashboard.scan_stop_requested.connect(self._stop_full_scan)
+        self._dashboard.scan_pause_requested.connect(self._pause_full_scan)
+        self._dashboard.scan_resume_requested.connect(self._resume_full_scan)
         self._dashboard.device_selected.connect(self._on_device_selected)
         self._dashboard.device_inspect.connect(self._on_device_inspect)
         self._dashboard.stat_filter_requested.connect(self._on_stat_filter)
@@ -347,10 +559,14 @@ class MainWindow(QMainWindow):
         graph.device_scan_deep.connect(lambda d: self._scan_single_host(d, ScanDepth.DEEP))
         graph.device_vuln_scan.connect(lambda d: self._start_vuln_scan([d]))
         graph.device_send_to_msf.connect(self._send_device_to_msf)
+        graph.device_send_to_attack.connect(self._send_device_to_attack)
+        graph.device_web_scan.connect(self._send_device_to_web_scan)
+        graph.device_brute_force.connect(self._send_device_to_brute)
         graph.device_remove.connect(self._remove_device)
         graph.device_selection_toggled.connect(self._on_graph_selection_toggled)
 
         # Interfaces
+        self._interfaces.refresh_requested.connect(self._refresh_interfaces)
         self._interfaces.interface_up.connect(
             lambda n: self._iface_manager.set_up(n) or self._refresh_interfaces())
         self._interfaces.interface_down.connect(
@@ -374,8 +590,25 @@ class MainWindow(QMainWindow):
         # Vulnerabilities
         self._vulns_tab.exploit_requested.connect(self._on_exploit_requested)
 
+        # Attack tab
+        self._attack_tab.mitm_start.connect(self._start_mitm)
+        self._attack_tab.mitm_stop.connect(self._stop_mitm)
+        self._attack_tab.mitm_dns_spoof.connect(self._mitm_dns_spoof)
+        self._attack_tab.deauth_start.connect(self._start_deauth)
+        self._attack_tab.deauth_stop.connect(self._stop_deauth)
+        self._attack_tab.handshake_start.connect(self._start_handshake_capture)
+        self._attack_tab.wps_start.connect(self._start_wps)
+        self._attack_tab.wps_stop.connect(self._stop_wps)
+        self._attack_tab.web_scan_start.connect(self._start_web_scan)
+        self._attack_tab.web_scan_stop.connect(self._stop_web_scan)
+        self._attack_tab.payload_generate.connect(self._generate_payload)
+        self._attack_tab.brute_start.connect(self._start_brute_force)
+        self._attack_tab.brute_stop.connect(self._stop_brute_force)
+
         # Metasploit
         self._msf_tab.connect_requested.connect(self._connect_metasploit)
+        self._msf_tab.search_requested.connect(self._search_metasploit_modules)
+        self._msf_tab.refresh_sessions_requested.connect(self._refresh_msf_sessions)
         self._msf_tab.exploit_run.connect(self._run_metasploit_exploit)
 
         # Reports
@@ -462,10 +695,25 @@ class MainWindow(QMainWindow):
         """Stop the running full network scan."""
         if self._scan_worker and self._scan_worker.isRunning():
             log.info("Aborting full network scan...")
+            self._scan_worker.resume()  # unblock if paused
             self._scan_worker.abort()
             self._status_label.setText(tr("Scan aborted"))
             self._progress.setVisible(False)
             self._dashboard.set_scan_enabled(True)
+
+    def _pause_full_scan(self) -> None:
+        """Pause the running scan."""
+        if self._scan_worker and self._scan_worker.isRunning():
+            self._scan_worker.pause()
+            self._status_label.setText(tr("Scan paused"))
+            log.info("Scan paused by user")
+
+    def _resume_full_scan(self) -> None:
+        """Resume a paused scan."""
+        if self._scan_worker and self._scan_worker.isRunning():
+            self._scan_worker.resume()
+            self._status_label.setText(tr("Scan resumed"))
+            log.info("Scan resumed by user")
 
     @Slot(str, int)
     def _on_scan_progress(self, message: str, percent: int) -> None:
@@ -711,6 +959,51 @@ class MainWindow(QMainWindow):
         self._tabs.setCurrentWidget(self._msf_tab)
         log.info(f"Sent {device.ip} to Metasploit tab")
 
+    def _send_device_to_attack(self, device: Device) -> None:
+        """Switch to Attack tab MITM panel with device IP pre-filled."""
+        gateway = self._get_gateway_ip()
+        self._attack_tab.set_target(device.ip, gateway)
+        self._tabs.setCurrentWidget(self._attack_tab)
+        self._attack_tab.switch_to_mitm()
+
+    def _send_device_to_web_scan(self, device: Device) -> None:
+        """Switch to Attack tab Web Scan panel with device IP pre-filled."""
+        # Auto-detect web port
+        port = 80
+        use_ssl = False
+        for svc in device.services:
+            if svc.name in ("http", "https", "http-proxy", "http-alt"):
+                port = svc.port
+                use_ssl = svc.name == "https" or svc.port == 443
+                break
+        self._attack_tab.web.set_target(device.ip, port)
+        self._tabs.setCurrentWidget(self._attack_tab)
+        self._attack_tab.switch_to_web()
+
+    def _send_device_to_brute(self, device: Device) -> None:
+        """Switch to Attack tab Brute-Force panel with device IP pre-filled."""
+        # Auto-detect best service for brute-force
+        service = "ssh"
+        port = 22
+        brute_services = {"ssh": 22, "ftp": 21, "smb": 445, "rdp": 3389,
+                          "telnet": 23, "http": 80, "mysql": 3306}
+        for svc in device.services:
+            svc_name = svc.name.lower()
+            if svc_name in brute_services:
+                service = svc_name
+                port = svc.port
+                break
+        self._attack_tab.brute_force.set_target(device.ip, port, service)
+        self._tabs.setCurrentWidget(self._attack_tab)
+        self._attack_tab.switch_to_brute()
+
+    def _get_gateway_ip(self) -> str:
+        """Get gateway IP from connected interfaces."""
+        connected = self._iface_manager.get_connected()
+        if connected and connected[0].gateway:
+            return connected[0].gateway
+        return ""
+
     def _remove_device(self, device: Device) -> None:
         """Remove a device from all views and internal storage."""
         ip = device.ip
@@ -870,6 +1163,13 @@ class MainWindow(QMainWindow):
         devices = self._get_selected_devices()
         if not devices:
             return
+        reply = QMessageBox.question(
+            self, tr("Confirm Removal"),
+            tr("Remove {count} device(s) from results?").format(count=len(devices)),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
         for device in list(devices):
             self._remove_device(device)
 
@@ -891,6 +1191,28 @@ class MainWindow(QMainWindow):
             self._msf_status_label.setStyleSheet("color: #4a8a5a;")
         else:
             QMessageBox.warning(self, tr("Metasploit"), tr("Failed to connect to msfrpcd."))
+
+    @Slot(str)
+    def _search_metasploit_modules(self, query: str) -> None:
+        """Search Metasploit modules and display results."""
+        if not self._msf_bridge.is_connected:
+            QMessageBox.warning(self, tr("Metasploit"),
+                                tr("Connect to Metasploit first."))
+            return
+        results = self._msf_bridge.search_exploits(query)
+        self._msf_tab.set_search_results(results)
+        log.info(f"MSF search '{query}': {len(results)} modules found")
+
+    @Slot()
+    def _refresh_msf_sessions(self) -> None:
+        """Refresh active Metasploit sessions."""
+        if not self._msf_bridge.is_connected:
+            QMessageBox.warning(self, tr("Metasploit"),
+                                tr("Connect to Metasploit first."))
+            return
+        sessions = self._msf_bridge.get_sessions()
+        self._msf_tab.set_sessions(sessions)
+        log.info(f"MSF sessions: {len(sessions)} active")
 
     @Slot(object)
     def _on_exploit_requested(self, vuln: Vulnerability) -> None:
@@ -959,15 +1281,241 @@ class MainWindow(QMainWindow):
         self._status_label.setText(tr("Updates done: {ok}/{total} successful").format(ok=successes, total=total))
         log.info(f"Database updates: {results}")
         # Auto-refresh DB status panel in Settings
-        self._settings_tab._refresh_db_status()
+        self._settings_tab.refresh_db_status()
+
+    # === Attack operations ===
+
+    def _start_mitm(self, iface: str, target: str, gateway: str,
+                    two_way: bool, capture: bool) -> None:
+        if self._arp_worker and self._arp_worker.isRunning():
+            QMessageBox.warning(self, tr("MITM Active"), tr("MITM attack is already running."))
+            return
+
+        log.info(f"Starting MITM: {target} <-> {gateway} via {iface}")
+        self._attack_tab.mitm.set_running(True)
+
+        self._arp_worker = ArpSpoofWorker(iface, target, gateway, two_way, capture)
+        self._arp_worker.progress.connect(
+            lambda msg: self._attack_tab.mitm.append_output(msg, "#5a7ea0"))
+        self._arp_worker.packet_captured.connect(
+            lambda pkt: self._attack_tab.mitm.append_output(pkt, "#606070"))
+        self._arp_worker.error.connect(self._on_attack_error)
+        self._arp_worker.finished.connect(lambda: self._attack_tab.mitm.set_running(False))
+        self._arp_worker.start()
+
+    def _stop_mitm(self) -> None:
+        if self._arp_worker and self._arp_worker.isRunning():
+            self._arp_worker.abort()
+            self._attack_tab.mitm.set_running(False)
+            log.info("MITM stopped")
+
+    def _mitm_dns_spoof(self, domain: str, redirect_ip: str) -> None:
+        if self._arp_worker and self._arp_worker.isRunning():
+            self._attack_tab.mitm.append_output(
+                f"DNS spoof: {domain} -> {redirect_ip}", "#b09040")
+            # DNS spoofing is handled inside the ArpSpoofer module
+            from modules.arp_spoofer import ArpSpoofer
+            # We access spoofer through worker (it has a reference)
+            log.info(f"DNS spoof requested: {domain} -> {redirect_ip}")
+        else:
+            QMessageBox.warning(self, tr("MITM Required"),
+                                tr("Start MITM attack first."))
+
+    def _start_deauth(self, iface: str, bssid: str, client: str, count: int) -> None:
+        if self._deauth_worker and self._deauth_worker.isRunning():
+            QMessageBox.warning(self, tr("Active"), tr("Deauth attack already running."))
+            return
+
+        log.info(f"Starting deauth: AP={bssid}, client={client or 'all'}")
+        self._attack_tab.wifi.set_deauth_running(True)
+
+        self._deauth_worker = DeauthWorker(iface, bssid, client, count)
+        self._deauth_worker.progress.connect(
+            lambda msg: self._attack_tab.wifi.append_output(msg, "#c04848"))
+        self._deauth_worker.output.connect(
+            lambda msg: self._attack_tab.wifi.append_output(msg))
+        self._deauth_worker.error.connect(self._on_attack_error)
+        self._deauth_worker.finished.connect(
+            lambda: self._attack_tab.wifi.set_deauth_running(False))
+        self._deauth_worker.start()
+
+    def _stop_deauth(self) -> None:
+        if self._deauth_worker and self._deauth_worker.isRunning():
+            self._deauth_worker.abort()
+            self._attack_tab.wifi.set_deauth_running(False)
+
+    def _start_handshake_capture(self, iface: str, bssid: str, channel: int,
+                                  timeout: int, auto_deauth: bool, wordlist: str) -> None:
+        if self._handshake_worker and self._handshake_worker.isRunning():
+            QMessageBox.warning(self, tr("Active"), tr("Handshake capture already running."))
+            return
+
+        log.info(f"Starting handshake capture: {bssid} ch {channel}")
+
+        self._handshake_worker = HandshakeWorker(
+            iface, bssid, channel, timeout, auto_deauth, wordlist
+        )
+        self._handshake_worker.progress.connect(
+            lambda msg: self._attack_tab.wifi.append_output(msg, "#5a7ea0"))
+        self._handshake_worker.output.connect(
+            lambda msg: self._attack_tab.wifi.append_output(msg))
+        self._handshake_worker.handshake_captured.connect(
+            lambda path: self._attack_tab.wifi.append_output(
+                f"Handshake saved: {path}", "#4a8a5a"))
+        self._handshake_worker.password_found.connect(
+            lambda pw: self._attack_tab.wifi.append_output(
+                f"PASSWORD FOUND: {pw}", "#4a8a5a"))
+        self._handshake_worker.error.connect(self._on_attack_error)
+        self._handshake_worker.finished.connect(lambda: None)
+        self._handshake_worker.start()
+
+    def _start_wps(self, iface: str, bssid: str, channel: int,
+                   method: str, timeout: int) -> None:
+        if self._wps_worker and self._wps_worker.isRunning():
+            QMessageBox.warning(self, tr("Active"), tr("WPS attack already running."))
+            return
+
+        log.info(f"Starting WPS attack ({method}): {bssid}")
+        self._attack_tab.wifi.set_wps_running(True)
+
+        self._wps_worker = WpsWorker(iface, bssid, channel, method, timeout)
+        self._wps_worker.progress.connect(
+            lambda msg: self._attack_tab.wifi.append_output(msg, "#b09040"))
+        self._wps_worker.output.connect(
+            lambda msg: self._attack_tab.wifi.append_output(msg))
+        self._wps_worker.pin_found.connect(
+            lambda pin, pw: self._attack_tab.wifi.append_output(
+                f"WPS PIN: {pin} | Password: {pw}", "#4a8a5a"))
+        self._wps_worker.error.connect(self._on_attack_error)
+        self._wps_worker.finished.connect(
+            lambda: self._attack_tab.wifi.set_wps_running(False))
+        self._wps_worker.start()
+
+    def _stop_wps(self) -> None:
+        if self._wps_worker and self._wps_worker.isRunning():
+            self._wps_worker.abort()
+            self._attack_tab.wifi.set_wps_running(False)
+
+    def _start_web_scan(self, target: str, port: int, use_ssl: bool) -> None:
+        if self._web_scan_worker and self._web_scan_worker.isRunning():
+            QMessageBox.warning(self, tr("Active"), tr("Web scan already running."))
+            return
+
+        log.info(f"Starting web scan: {target}:{port} (ssl={use_ssl})")
+        self._attack_tab.web.set_running(True)
+        self._attack_tab.web.clear_results()
+
+        self._web_scan_worker = WebScanWorker([(target, port, use_ssl)])
+        self._web_scan_worker.progress.connect(self._on_scan_progress)
+        self._web_scan_worker.vuln_found.connect(self._on_web_vuln_found)
+        self._web_scan_worker.error.connect(self._on_attack_error)
+        self._web_scan_worker.finished.connect(self._on_web_scan_finished)
+        self._web_scan_worker.start()
+
+    def _stop_web_scan(self) -> None:
+        if self._web_scan_worker and self._web_scan_worker.isRunning():
+            self._web_scan_worker.abort()
+            self._attack_tab.web.set_running(False)
+
+    @Slot(object)
+    def _on_web_vuln_found(self, vuln: Vulnerability) -> None:
+        self._attack_tab.web.add_vulnerability(vuln)
+        # Also add to global vulns list
+        self._vulns.append(vuln)
+        self._vulns_tab.add_vulnerability(vuln)
+        self._vuln_count_label.setText(tr("Vulns: {count}").format(count=len(self._vulns)))
+
+    def _on_web_scan_finished(self, vulns: list) -> None:
+        self._attack_tab.web.set_running(False)
+        self._status_label.setText(tr("Web scan complete: {count} issues").format(count=len(vulns)))
+        log.info(f"Web scan finished: {len(vulns)} vulnerabilities found")
+
+    def _generate_payload(self, payload: str, lhost: str, lport: int,
+                          fmt: str, encoder: str, iterations: int, output_dir: str) -> None:
+        if self._payload_worker and self._payload_worker.isRunning():
+            QMessageBox.warning(self, tr("Active"), tr("Payload generation in progress."))
+            return
+
+        log.info(f"Generating payload: {payload} ({fmt})")
+        self._attack_tab.payloads.append_output(
+            f"Generating {payload} -> {lhost}:{lport} ({fmt})...", "#b09040")
+
+        self._payload_worker = PayloadGenWorker(
+            payload, lhost, lport, fmt, encoder, iterations,
+            output_dir=output_dir,
+        )
+        self._payload_worker.progress.connect(
+            lambda msg: self._attack_tab.payloads.append_output(msg, "#5a7ea0"))
+        self._payload_worker.payload_ready.connect(
+            lambda path: self._attack_tab.payloads.append_output(
+                f"Payload saved: {path}", "#4a8a5a"))
+        self._payload_worker.handler_ready.connect(
+            lambda path: self._attack_tab.payloads.append_output(
+                f"Handler RC: {path}", "#4a8a5a"))
+        self._payload_worker.error.connect(self._on_attack_error)
+        self._payload_worker.finished.connect(lambda: None)
+        self._payload_worker.start()
+
+    def _start_brute_force(self, target: str, port: int, service: str,
+                           usernames, passwords, timeout: int,
+                           delay: float, max_attempts: int) -> None:
+        if self._brute_worker and self._brute_worker.isRunning():
+            QMessageBox.warning(self, tr("Active"), tr("Brute-force already running."))
+            return
+
+        log.info(f"Starting brute-force: {service}://{target}:{port}")
+        self._attack_tab.brute_force.set_running(True)
+
+        self._brute_worker = BruteForceWorker(
+            target, port, service, usernames, passwords,
+            timeout=timeout, delay=delay, max_attempts=max_attempts,
+        )
+        self._brute_worker.progress.connect(self._on_scan_progress)
+        self._brute_worker.credential_found.connect(
+            lambda cred: self._attack_tab.brute_force.add_credential(cred))
+        self._brute_worker.error.connect(self._on_attack_error)
+        self._brute_worker.finished.connect(self._on_brute_finished)
+        self._brute_worker.start()
+
+    def _stop_brute_force(self) -> None:
+        if self._brute_worker and self._brute_worker.isRunning():
+            self._brute_worker.abort()
+            self._attack_tab.brute_force.set_running(False)
+
+    def _on_brute_finished(self, result) -> None:
+        self._attack_tab.brute_force.set_running(False)
+        count = len(result.valid_credentials) if result else 0
+        self._status_label.setText(
+            tr("Brute-force complete: {count} credentials found").format(count=count))
+        log.info(f"Brute-force complete: {count} valid credentials")
+
+    def _on_attack_error(self, error: str) -> None:
+        log.error(f"Attack error: {error}")
+        self._status_label.setText(tr("Attack error: {error}").format(error=error))
+        QMessageBox.critical(self, tr("Attack Error"), error)
 
     def closeEvent(self, event) -> None:
-        # Cleanup workers
-        for worker in [self._scan_worker, self._vuln_worker,
-                       self._host_worker, self._update_worker]:
+        # Cleanup scan workers
+        workers = [self._scan_worker, self._vuln_worker,
+                   self._host_worker, self._update_worker]
+        # Cleanup attack workers
+        attack_workers = [self._arp_worker, self._deauth_worker,
+                          self._handshake_worker, self._wps_worker,
+                          self._web_scan_worker, self._payload_worker,
+                          self._brute_worker]
+        all_workers = workers + attack_workers
+
+        for worker in all_workers:
             if worker and worker.isRunning():
                 worker.abort()
-                worker.wait(3000)
+
+        for worker in all_workers:
+            if worker and worker.isRunning():
+                if not worker.wait(5000):
+                    log.warning(f"Force-terminating stuck worker: {worker.__class__.__name__}")
+                    worker.terminate()
+                    worker.wait(2000)
+
         if self._msf_bridge.is_connected:
             self._msf_bridge.disconnect()
         super().closeEvent(event)

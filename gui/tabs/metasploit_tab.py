@@ -17,6 +17,8 @@ class MetasploitTab(QWidget):
     """Metasploit framework integration tab."""
 
     connect_requested = Signal(str, int, str)  # host, port, password
+    search_requested = Signal(str)  # query
+    refresh_sessions_requested = Signal()
     exploit_run = Signal(str, str, int, str, dict)  # module, target_ip, port, payload, options
 
     def __init__(self, parent=None):
@@ -124,12 +126,29 @@ class MetasploitTab(QWidget):
             "windows/x64/meterpreter/reverse_tcp",
             "windows/meterpreter/reverse_tcp",
             "linux/x64/meterpreter/reverse_tcp",
+            "linux/x64/shell/reverse_tcp",
+            "cmd/unix/reverse_bash",
             "generic/shell_reverse_tcp",
         ])
         self._payload_combo.setMinimumWidth(300)
         target_layout.addWidget(self._payload_combo)
         target_layout.addStretch()
         exploit_layout.addLayout(target_layout)
+
+        # LHOST / LPORT row (critical for reverse shells)
+        lhost_layout = QHBoxLayout()
+        lhost_layout.addWidget(QLabel(tr("LHOST:")))
+        self._lhost_input = QLineEdit()
+        self._lhost_input.setPlaceholderText(tr("Your IP (auto-detect)"))
+        self._lhost_input.setMaximumWidth(200)
+        lhost_layout.addWidget(self._lhost_input)
+
+        lhost_layout.addWidget(QLabel(tr("LPORT:")))
+        self._lport_input = QLineEdit("4444")
+        self._lport_input.setMaximumWidth(80)
+        lhost_layout.addWidget(self._lport_input)
+        lhost_layout.addStretch()
+        exploit_layout.addLayout(lhost_layout)
 
         run_layout = QHBoxLayout()
         self._run_btn = QPushButton(tr("Run Exploit"))
@@ -217,14 +236,27 @@ class MetasploitTab(QWidget):
         self._module_input.setText(mod.get("name", ""))
 
     def _on_connect(self) -> None:
-        host = self._host_input.text()
-        port = int(self._port_input.text() or "55553")
+        host = self._host_input.text().strip()
+        if not host:
+            QMessageBox.warning(self, tr("Invalid Input"), tr("Host address is required."))
+            return
+        try:
+            port = int(self._port_input.text() or "55553")
+            if not (1 <= port <= 65535):
+                raise ValueError("Port out of range")
+        except ValueError:
+            QMessageBox.warning(self, tr("Invalid Port"),
+                                tr("Port must be a number between 1 and 65535."))
+            return
         password = self._pass_input.text()
         self.connect_requested.emit(host, port, password)
 
     def _on_search(self) -> None:
-        # This will be connected to main window which calls MetasploitBridge
-        pass
+        query = self._search_input.text().strip()
+        if not query:
+            QMessageBox.information(self, tr("Search"), tr("Enter a search query (CVE, module name, keyword)."))
+            return
+        self.search_requested.emit(query)
 
     def _on_run_exploit(self) -> None:
         module = self._module_input.text()
@@ -239,9 +271,26 @@ class MetasploitTab(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            port = int(self._rport_input.text() or "0")
-            payload = self._payload_combo.currentText()
-            self.exploit_run.emit(module, target, port, payload, {})
+            try:
+                port = int(self._rport_input.text() or "0")
+            except ValueError:
+                QMessageBox.warning(self, tr("Invalid Port"), tr("RPORT must be a number."))
+                return
+            payload = self._payload_combo.currentText().strip()
+
+            # Build options dict with LHOST/LPORT if set
+            options = {}
+            lhost = self._lhost_input.text().strip()
+            lport = self._lport_input.text().strip()
+            if lhost:
+                options["LHOST"] = lhost
+            if lport:
+                try:
+                    options["LPORT"] = int(lport)
+                except ValueError:
+                    pass
+
+            self.exploit_run.emit(module, target, port, payload, options)
 
     def _on_refresh_sessions(self) -> None:
-        pass  # Connected in main_window
+        self.refresh_sessions_requested.emit()

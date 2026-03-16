@@ -83,6 +83,8 @@ class DashboardTab(QWidget):
 
     scan_requested = Signal(str)   # target CIDR
     scan_stop_requested = Signal()
+    scan_pause_requested = Signal()
+    scan_resume_requested = Signal()
     stat_filter_requested = Signal(str)  # filter_key: "all", "cameras", "pcs", "vulns", "critical"
     device_selected = Signal(object)
     device_inspect = Signal(object)
@@ -133,10 +135,15 @@ class DashboardTab(QWidget):
 
         self._scan_btn = QPushButton()
         self._scan_btn.setObjectName("primaryButton")
-        self._scan_btn.setMinimumWidth(250)
+        self._scan_btn.setMinimumWidth(200)
         self._scan_btn.clicked.connect(self._on_scan_clicked)
         self._depth_combo.currentIndexChanged.connect(self._update_scan_btn_text)
         self._update_scan_btn_text()
+
+        self._pause_btn = QPushButton(tr("Pause"))
+        self._pause_btn.setFixedWidth(80)
+        self._pause_btn.setVisible(False)
+        self._pause_btn.clicked.connect(self._on_pause_clicked)
 
         top_bar.addWidget(title)
         top_bar.addStretch()
@@ -144,6 +151,7 @@ class DashboardTab(QWidget):
         top_bar.addWidget(self._target_input)
         top_bar.addWidget(self._depth_combo)
         top_bar.addWidget(self._scan_btn)
+        top_bar.addWidget(self._pause_btn)
         layout.addLayout(top_bar)
 
         # Automation options row
@@ -233,6 +241,7 @@ class DashboardTab(QWidget):
         self._auto_vuln.setEnabled(enabled)
         self._auto_report.setEnabled(enabled)
         self._scanning = not enabled
+        self._pause_btn.setVisible(not enabled)
         if enabled:
             # Restore normal scan button
             self._scan_btn.setEnabled(True)
@@ -240,6 +249,7 @@ class DashboardTab(QWidget):
             self._scan_btn.style().unpolish(self._scan_btn)
             self._scan_btn.style().polish(self._scan_btn)
             self._update_scan_btn_text()
+            self._pause_btn.setText(tr("Pause"))
         else:
             # Switch to stop button
             self._scan_btn.setEnabled(True)
@@ -311,6 +321,21 @@ class DashboardTab(QWidget):
         elif iface.ip_address:
             parts = iface.ip_address.rsplit(".", 1)
             self._target_input.setText(f"{parts[0]}.0/24")
+
+    def _on_pause_clicked(self) -> None:
+        """Toggle pause/resume."""
+        if self._pause_btn.text() == tr("Pause"):
+            self._pause_btn.setText(tr("Resume"))
+            self._pause_btn.setObjectName("successButton")
+            self._pause_btn.style().unpolish(self._pause_btn)
+            self._pause_btn.style().polish(self._pause_btn)
+            self.scan_pause_requested.emit()
+        else:
+            self._pause_btn.setText(tr("Pause"))
+            self._pause_btn.setObjectName("")
+            self._pause_btn.style().unpolish(self._pause_btn)
+            self._pause_btn.style().polish(self._pause_btn)
+            self.scan_resume_requested.emit()
 
     def _on_scan_clicked(self) -> None:
         # If scanning, this button acts as stop

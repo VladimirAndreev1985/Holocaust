@@ -13,10 +13,142 @@ from PySide6.QtWidgets import (
     QLineEdit, QCheckBox, QGroupBox, QComboBox, QSpinBox,
     QFormLayout, QMessageBox, QFrame, QGridLayout, QScrollArea,
 )
-from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtCore import Qt, Signal, QTimer, QThread, QObject
 from PySide6.QtGui import QFont
 
 from core.i18n import tr
+
+
+class _DbStatusWorker(QThread):
+    """Background worker for checking database statuses without blocking UI."""
+    result = Signal(dict)  # {component: {status, details, updated, color}}
+
+    def __init__(self, db_dir: Path, vulners_key: str = "", parent=None):
+        super().__init__(parent)
+        self._db_dir = db_dir
+        self._vulners_key = vulners_key
+
+    def run(self) -> None:
+        results = {}
+
+        # --- Nmap ---
+        nmap_path = shutil.which("nmap")
+        if nmap_path:
+            try:
+                import subprocess
+                r = subprocess.run(["nmap", "--version"], capture_output=True, text=True, timeout=5)
+                version = r.stdout.split("\n")[0].strip() if r.stdout else "installed"
+                nmap_updated = ""
+                # Check multiple possible NSE script paths
+                for nse_dir in [Path("/usr/share/nmap/scripts/script.db"),
+                                Path("C:/Program Files (x86)/Nmap/scripts/script.db"),
+                                Path("C:/Program Files/Nmap/scripts/script.db")]:
+                    if nse_dir.exists():
+                        mtime = datetime.fromtimestamp(nse_dir.stat().st_mtime)
+                        nmap_updated = mtime.strftime("%Y-%m-%d %H:%M")
+                        break
+                results["nmap"] = {"status": "Installed", "details": version,
+                                   "updated": nmap_updated or "N/A", "color": "#4a8a5a"}
+            except Exception:
+                results["nmap"] = {"status": "Installed", "details": "version unknown",
+                                   "updated": "N/A", "color": "#4a8a5a"}
+        else:
+            results["nmap"] = {"status": "Not found", "details": "Install nmap first",
+                               "updated": "", "color": "#a05050"}
+
+        # --- Metasploit ---
+        msf_path = shutil.which("msfconsole")
+        if msf_path:
+            try:
+                import subprocess
+                r = subprocess.run(["msfconsole", "--version"], capture_output=True, text=True, timeout=10)
+                msf_detail = r.stdout.strip()[:60] if r.stdout else "installed"
+            except Exception:
+                msf_detail = "installed"
+            msf_updated = ""
+            for msf_db in [Path("/usr/share/metasploit-framework/data/msfdb_version"),
+                           Path("C:/metasploit-framework/data/msfdb_version")]:
+                if msf_db.exists():
+                    mtime = datetime.fromtimestamp(msf_db.stat().st_mtime)
+                    msf_updated = mtime.strftime("%Y-%m-%d %H:%M")
+                    break
+            results["metasploit"] = {"status": "Installed", "details": msf_detail,
+                                     "updated": msf_updated or "N/A", "color": "#4a8a5a"}
+        else:
+            results["metasploit"] = {"status": "Not found",
+                                     "details": "Install metasploit-framework",
+                                     "updated": "", "color": "#a05050"}
+
+        # --- CVE Cache ---
+        cve_db_path = self._db_dir / "cve_cache.db"
+        if cve_db_path.exists():
+            try:
+                conn = sqlite3.connect(str(cve_db_path))
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM cve_entries")
+                count = cursor.fetchone()[0]
+                conn.close()
+                mtime = datetime.fromtimestamp(cve_db_path.stat().st_mtime)
+                if count > 0:
+                    results["cve_cache"] = {
+                        "status": "Active", "details": f"{count} CVE entries cached",
+                        "updated": mtime.strftime("%Y-%m-%d %H:%M"), "color": "#4a8a5a"}
+                else:
+                    results["cve_cache"] = {
+                        "status": "Empty", "details": "0 entries — run Update All",
+                        "updated": mtime.strftime("%Y-%m-%d %H:%M"), "color": "#b09040"}
+            except Exception as e:
+                results["cve_cache"] = {"status": "Error", "details": str(e)[:50],
+                                        "updated": "", "color": "#a05050"}
+        else:
+            results["cve_cache"] = {"status": "Not created",
+                                    "details": "Will be created on first run",
+                                    "updated": "", "color": "#b09040"}
+
+        # --- Device Signatures ---
+        sig_db_path = self._db_dir / "device_signatures.db"
+        if sig_db_path.exists():
+            try:
+                conn = sqlite3.connect(str(sig_db_path))
+                cursor = conn.cursor()
+                counts = {}
+                for table in ["oui_vendor", "port_signature", "product_signature", "default_credentials"]:
+                    try:
+                        cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                        counts[table] = cursor.fetchone()[0]
+                    except sqlite3.OperationalError:
+                        counts[table] = 0
+                conn.close()
+                total = sum(counts.values())
+                results["signatures"] = {
+                    "status": "Active" if total > 0 else "Empty",
+                    "details": (f"OUI: {counts['oui_vendor']}, Ports: {counts['port_signature']}, "
+                                f"Products: {counts['product_signature']}, Creds: {counts['default_credentials']}"),
+                    "updated": datetime.fromtimestamp(sig_db_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+                    "color": "#4a8a5a" if total > 0 else "#b09040",
+                }
+            except Exception as e:
+                results["signatures"] = {"status": "Error", "details": str(e)[:50],
+                                          "updated": "", "color": "#a05050"}
+        else:
+            results["signatures"] = {"status": "Not created", "details": "",
+                                      "updated": "", "color": "#b09040"}
+
+        # --- Vulners API ---
+        if self._vulners_key:
+            results["vulners"] = {
+                "status": "Configured",
+                "details": f"Key: {'*' * 8}...{self._vulners_key[-4:]}" if len(self._vulners_key) > 4 else "Key set",
+                "updated": "N/A", "color": "#4a8a5a",
+            }
+        else:
+            results["vulners"] = {
+                "status": "No API key",
+                "details": "Optional — works without key (limited)",
+                "updated": "N/A", "color": "#b09040",
+            }
+
+        self.result.emit(results)
 
 
 class SettingsTab(QWidget):
@@ -216,135 +348,36 @@ class SettingsTab(QWidget):
 
         layout.addStretch()
 
+    def refresh_db_status(self) -> None:
+        """Public API for refreshing DB status from outside."""
+        self._refresh_db_status()
+
     def _refresh_db_status(self) -> None:
-        """Check and display status of all security databases."""
+        """Check database statuses in background thread (non-blocking)."""
         db_dir = Path(__file__).parent.parent.parent / "database"
 
-        # --- Nmap ---
-        nmap_labels = self._db_status_labels["nmap"]
-        nmap_path = shutil.which("nmap")
-        if nmap_path:
-            try:
-                import subprocess
-                r = subprocess.run(["nmap", "--version"], capture_output=True, text=True, timeout=5)
-                version = r.stdout.split("\n")[0].strip() if r.stdout else "installed"
-                nmap_labels["status"].setText(tr("Installed"))
-                nmap_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
-                nmap_labels["details"].setText(version)
-                # Check script DB modification time
-                nse_path = Path("/usr/share/nmap/scripts/script.db")
-                if nse_path.exists():
-                    mtime = datetime.fromtimestamp(nse_path.stat().st_mtime)
-                    nmap_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
-                else:
-                    nmap_labels["updated"].setText(tr("N/A"))
-            except Exception:
-                nmap_labels["status"].setText(tr("Installed"))
-                nmap_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
-        else:
-            nmap_labels["status"].setText(tr("Not found"))
-            nmap_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
-            nmap_labels["details"].setText("sudo apt install nmap")
+        # Show loading state
+        for labels in self._db_status_labels.values():
+            labels["status"].setText(tr("Checking..."))
+            labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
+            labels["details"].setText("—")
+            labels["updated"].setText("—")
 
-        # --- Metasploit ---
-        msf_labels = self._db_status_labels["metasploit"]
-        msf_path = shutil.which("msfconsole")
-        if msf_path:
-            msf_labels["status"].setText(tr("Installed"))
-            msf_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
-            try:
-                import subprocess
-                r = subprocess.run(["msfconsole", "--version"], capture_output=True, text=True, timeout=10)
-                msf_labels["details"].setText(r.stdout.strip()[:60] if r.stdout else "installed")
-            except Exception:
-                msf_labels["details"].setText("installed")
-            # Check msf DB update time
-            msf_db = Path("/usr/share/metasploit-framework/data/msfdb_version")
-            if msf_db.exists():
-                mtime = datetime.fromtimestamp(msf_db.stat().st_mtime)
-                msf_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
-            elif shutil.which("msfupdate"):
-                msf_labels["updated"].setText(tr("Use 'Update All'"))
-            else:
-                msf_labels["updated"].setText(tr("N/A"))
-        else:
-            msf_labels["status"].setText(tr("Not found"))
-            msf_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
-            msf_labels["details"].setText("sudo apt install metasploit-framework")
-
-        # --- CVE Cache ---
-        cve_labels = self._db_status_labels["cve_cache"]
-        cve_db_path = db_dir / "cve_cache.db"
-        if cve_db_path.exists():
-            try:
-                conn = sqlite3.connect(cve_db_path)
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM cve_entries")
-                count = cursor.fetchone()[0]
-                conn.close()
-                if count > 0:
-                    cve_labels["status"].setText(tr("Active"))
-                    cve_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
-                    cve_labels["details"].setText(tr("{count} CVE entries cached").format(count=count))
-                else:
-                    cve_labels["status"].setText(tr("Empty"))
-                    cve_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
-                    cve_labels["details"].setText(tr("0 entries — run Update All"))
-                mtime = datetime.fromtimestamp(cve_db_path.stat().st_mtime)
-                cve_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
-            except Exception as e:
-                cve_labels["status"].setText(tr("Error"))
-                cve_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
-                cve_labels["details"].setText(str(e)[:50])
-        else:
-            cve_labels["status"].setText(tr("Not created"))
-            cve_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
-            cve_labels["details"].setText(tr("Will be created on first run"))
-
-        # --- Device Signatures ---
-        sig_labels = self._db_status_labels["signatures"]
-        sig_db_path = db_dir / "device_signatures.db"
-        if sig_db_path.exists():
-            try:
-                conn = sqlite3.connect(sig_db_path)
-                cursor = conn.cursor()
-                counts = {}
-                for table in ["oui_vendor", "port_signature", "product_signature", "default_credentials"]:
-                    cursor.execute(f"SELECT COUNT(*) FROM {table}")
-                    counts[table] = cursor.fetchone()[0]
-                conn.close()
-                total = sum(counts.values())
-                sig_labels["status"].setText(tr("Active") if total > 0 else tr("Empty"))
-                sig_labels["status"].setStyleSheet(
-                    "color: #4a8a5a; font-weight: bold;" if total > 0
-                    else "color: #b09040; font-weight: bold;"
-                )
-                sig_labels["details"].setText(
-                    f"OUI: {counts['oui_vendor']}, Ports: {counts['port_signature']}, "
-                    f"Products: {counts['product_signature']}, Creds: {counts['default_credentials']}"
-                )
-                mtime = datetime.fromtimestamp(sig_db_path.stat().st_mtime)
-                sig_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
-            except Exception as e:
-                sig_labels["status"].setText(tr("Error"))
-                sig_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
-                sig_labels["details"].setText(str(e)[:50])
-        else:
-            sig_labels["status"].setText(tr("Not created"))
-            sig_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
-
-        # --- Vulners API ---
-        vuln_labels = self._db_status_labels["vulners"]
         api_key = self._vulners_key.text().strip()
-        if api_key:
-            vuln_labels["status"].setText(tr("Configured"))
-            vuln_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
-            vuln_labels["details"].setText(f"Key: {'*' * 8}...{api_key[-4:]}" if len(api_key) > 4 else tr("Key set"))
-        else:
-            vuln_labels["status"].setText(tr("No API key"))
-            vuln_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
-            vuln_labels["details"].setText(tr("Optional — works without key (limited)"))
-        vuln_labels["updated"].setText(tr("N/A"))
+        self._db_worker = _DbStatusWorker(db_dir, api_key)
+        self._db_worker.result.connect(self._on_db_status_result)
+        self._db_worker.start()
+
+    def _on_db_status_result(self, results: dict) -> None:
+        """Apply database status results from background worker."""
+        for key, data in results.items():
+            if key not in self._db_status_labels:
+                continue
+            labels = self._db_status_labels[key]
+            labels["status"].setText(tr(data["status"]))
+            labels["status"].setStyleSheet(f"color: {data['color']}; font-weight: bold;")
+            labels["details"].setText(data["details"])
+            labels["updated"].setText(data["updated"] or "—")
 
     def _load_settings(self) -> None:
         if self._config_path.exists():

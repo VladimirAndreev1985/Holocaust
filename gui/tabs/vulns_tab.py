@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import html
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QComboBox,
     QLineEdit, QGroupBox, QTextEdit, QSplitter, QMessageBox,
+    QApplication,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
@@ -183,26 +186,37 @@ class VulnsTab(QWidget):
 
         self._exploit_btn.setEnabled(vuln.has_exploit)
 
+        # Escape all user-supplied data to prevent HTML injection
+        esc = html.escape
+        cve = esc(vuln.cve_id or tr('N/A'))
+        title = esc(vuln.title)
+        desc = esc(vuln.description)
+        host = esc(vuln.host_ip)
+        port = esc(str(vuln.affected_port) if vuln.affected_port else "—")
+        source = esc(vuln.source.value)
+
         details = (
-            f"<b>{vuln.cve_id or tr('N/A')}</b> — {vuln.title}<br><br>"
-            f"<b>{tr('Host')}:</b> {vuln.host_ip}:{vuln.affected_port}<br>"
-            f"<b>{tr('CVSS')}:</b> {vuln.cvss_score} ({vuln.severity.value})<br>"
-            f"<b>{tr('Source')}:</b> {vuln.source.value}<br>"
+            f"<b>{cve}</b> — {title}<br><br>"
+            f"<b>{tr('Host')}:</b> {host}:{port}<br>"
+            f"<b>{tr('CVSS')}:</b> {vuln.cvss_score} ({esc(vuln.severity.value)})<br>"
+            f"<b>{tr('Source')}:</b> {source}<br>"
             f"<b>{tr('Confirmed')}:</b> {tr('Yes') if vuln.is_confirmed else tr('No')}<br><br>"
-            f"<b>{tr('Description')}:</b><br>{vuln.description}<br><br>"
+            f"<b>{tr('Description')}:</b><br>{desc}<br><br>"
         )
 
         if vuln.exploits:
             details += f"<b>{tr('Available Exploits')}:</b><br>"
             for exp in vuln.exploits:
-                details += f"  - {exp.name} ({exp.source}) [{exp.reliability}]<br>"
+                details += f"  - {esc(exp.name)} ({esc(exp.source)}) [{esc(exp.reliability)}]<br>"
                 if exp.module_path:
-                    details += f"    {tr('Module')}: <code>{exp.module_path}</code><br>"
+                    details += f"    {tr('Module')}: <code>{esc(exp.module_path)}</code><br>"
 
         if vuln.references:
             details += f"<br><b>{tr('References')}:</b><br>"
             for ref in vuln.references[:5]:
-                details += f"  - {ref}<br>"
+                details += f"  - {esc(ref)}<br>"
+            if len(vuln.references) > 5:
+                details += f"  <i>... +{len(vuln.references) - 5} more</i><br>"
 
         self._detail_text.setHtml(details)
 
@@ -230,5 +244,17 @@ class VulnsTab(QWidget):
         if row >= 0:
             item = self._table.item(row, 0)
             if item and item.text() != "—":
-                from PySide6.QtWidgets import QApplication
                 QApplication.clipboard().setText(item.text())
+                self._status_toast(tr("Copied: {cve}").format(cve=item.text()))
+
+    def _status_toast(self, message: str, duration: int = 2000) -> None:
+        """Show a brief status message in the count label area."""
+        original = self._count_label.text()
+        original_style = self._count_label.styleSheet()
+        self._count_label.setText(message)
+        self._count_label.setStyleSheet("color: #4a8a5a; font-weight: bold;")
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(duration, lambda: (
+            self._count_label.setText(original),
+            self._count_label.setStyleSheet(original_style),
+        ))

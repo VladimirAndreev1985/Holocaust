@@ -22,6 +22,7 @@ class InterfacesTab(QWidget):
     monitor_enable = Signal(str)
     monitor_disable = Signal(str)
     check_kill = Signal()
+    refresh_requested = Signal()
     wifi_scan = Signal(str)              # interface name
     wifi_connect = Signal(str, str, str) # interface, ssid, password
 
@@ -109,6 +110,7 @@ class InterfacesTab(QWidget):
         layout.addWidget(splitter, 1)
 
         # Connect signals
+        self._refresh_btn.clicked.connect(self.refresh_requested.emit)
         self._up_btn.clicked.connect(self._on_up)
         self._down_btn.clicked.connect(self._on_down)
         self._monitor_btn.clicked.connect(self._on_monitor)

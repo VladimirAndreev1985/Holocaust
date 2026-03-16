@@ -71,7 +71,10 @@ class LogPanel(QWidget):
         # Log text area
         self._text = QTextEdit()
         self._text.setReadOnly(True)
-        self._text.setFont(QFont("Consolas", 11))
+        self._text.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        self._text.setFont(QFont("Consolas", 9))
         self._text.setStyleSheet("""
             QTextEdit {
                 background-color: #0b0b0f;
@@ -131,7 +134,7 @@ class LogPanel(QWidget):
     def _toggle_collapse(self) -> None:
         self._collapsed = not self._collapsed
         self._text.setVisible(not self._collapsed)
-        self._toggle_btn.setText(tr("Logs +") if self._collapsed else tr("Logs"))
+        self._toggle_btn.setText(tr("Logs \u25b6") if self._collapsed else tr("Logs \u25bc"))
 
     def _set_filter(self, level: str) -> None:
         self._filter = level

@@ -13,6 +13,9 @@ from models.network_interface import InterfaceMode, InterfaceType, NetworkInterf
 
 log = get_logger("interfaces")
 
+# Strict pattern for valid interface names — prevents command injection
+_VALID_IFACE_RE = re.compile(r"^[a-zA-Z0-9_\-.:]+$")
+
 
 class InterfaceManager:
 
@@ -75,7 +78,15 @@ class InterfaceManager:
     def get_connected(self) -> list[NetworkInterface]:
         return [i for i in self.get_all() if i.is_connected]
 
+    @staticmethod
+    def _validate_iface_name(name: str) -> bool:
+        """Validate interface name to prevent command injection."""
+        return bool(name and _VALID_IFACE_RE.match(name) and len(name) <= 64)
+
     def set_up(self, name: str) -> bool:
+        if not self._validate_iface_name(name):
+            log.error(f"Invalid interface name rejected: {name!r}")
+            return False
         log.info(f"Bringing up interface {name}")
         audit = get_audit_logger()
         if audit:
@@ -83,6 +94,9 @@ class InterfaceManager:
         return self._run_ip(["link", "set", name, "up"])
 
     def set_down(self, name: str) -> bool:
+        if not self._validate_iface_name(name):
+            log.error(f"Invalid interface name rejected: {name!r}")
+            return False
         log.info(f"Bringing down interface {name}")
         audit = get_audit_logger()
         if audit:
@@ -91,6 +105,9 @@ class InterfaceManager:
 
     def enable_monitor(self, name: str) -> Optional[str]:
         """Enable monitor mode. Returns the monitor interface name (e.g. wlan0mon)."""
+        if not self._validate_iface_name(name):
+            log.error(f"Invalid interface name rejected: {name!r}")
+            return None
         log.info(f"Enabling monitor mode on {name}")
         audit = get_audit_logger()
         if audit:
@@ -123,6 +140,9 @@ class InterfaceManager:
 
     def disable_monitor(self, name: str) -> bool:
         """Disable monitor mode."""
+        if not self._validate_iface_name(name):
+            log.error(f"Invalid interface name rejected: {name!r}")
+            return False
         log.info(f"Disabling monitor mode on {name}")
         audit = get_audit_logger()
         if audit:

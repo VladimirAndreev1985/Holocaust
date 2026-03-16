@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QLabel,
     QTableWidget, QTableWidgetItem, QTextEdit, QPushButton,
@@ -13,6 +16,8 @@ from PySide6.QtGui import QFont, QColor
 from models.device import Device, DeviceType
 from models.vulnerability import Vulnerability
 from core.i18n import tr
+
+_NOTES_FILE = Path("data/device_notes.json")
 
 
 class DetailPanel(QWidget):
@@ -85,9 +90,19 @@ class DetailPanel(QWidget):
         self._tabs.addTab(self._vulns_table, tr("Vulnerabilities"))
 
         # Raw/Notes tab
+        notes_widget = QWidget()
+        notes_layout = QVBoxLayout(notes_widget)
         self._notes = QTextEdit()
         self._notes.setPlaceholderText(tr("Notes about this device..."))
-        self._tabs.addTab(self._notes, tr("Notes"))
+        notes_layout.addWidget(self._notes)
+
+        save_notes_btn = QPushButton(tr("Save Notes"))
+        save_notes_btn.setObjectName("successButton")
+        save_notes_btn.setFixedWidth(120)
+        save_notes_btn.clicked.connect(self._save_notes)
+        notes_layout.addWidget(save_notes_btn)
+
+        self._tabs.addTab(notes_widget, tr("Notes"))
 
     def _setup_overview_tab(self) -> None:
         layout = QGridLayout(self._overview)
@@ -172,8 +187,39 @@ class DetailPanel(QWidget):
                 btn.clicked.connect(lambda _, v=vuln: self._on_exploit(v))
                 self._vulns_table.setCellWidget(row, 5, btn)
 
+        # Load saved notes
+        self._notes.setPlainText(self._load_notes(device.ip))
+
         self.setVisible(True)
 
     def _on_exploit(self, vuln: Vulnerability) -> None:
         if self._device:
             self.exploit_requested.emit(self._device, vuln)
+
+    def _load_notes(self, ip: str) -> str:
+        """Load saved notes for a device."""
+        try:
+            if _NOTES_FILE.exists():
+                data = json.loads(_NOTES_FILE.read_text(encoding="utf-8"))
+                return data.get(ip, "")
+        except Exception:
+            pass
+        return ""
+
+    def _save_notes(self) -> None:
+        """Save notes for the current device to disk."""
+        if not self._device:
+            return
+        _NOTES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            data = {}
+            if _NOTES_FILE.exists():
+                data = json.loads(_NOTES_FILE.read_text(encoding="utf-8"))
+            text = self._notes.toPlainText().strip()
+            if text:
+                data[self._device.ip] = text
+            else:
+                data.pop(self._device.ip, None)
+            _NOTES_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        except Exception:
+            pass

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import threading
 from typing import Optional
 
 from PySide6.QtCore import QThread, Signal
@@ -33,21 +35,22 @@ class DiscoveryWorker(QThread):
         self._config = config or ScanConfig()
         self._scanner = LanScanner(self._config)
         self._classifier = DeviceClassifier()
-        self._abort = False
+        self._abort_event = threading.Event()
 
     def run(self) -> None:
         try:
             self.progress.emit("Starting host discovery...", 0)
             result = self._scanner.discover_hosts(self.target)
 
-            if self._abort:
+            if self._abort_event.is_set():
                 return
 
             self.progress.emit("Classifying devices...", 70)
             self._classifier.classify_all(result.devices)
 
             for device in result.devices:
-                self.host_found.emit(device)
+                # Send a copy to prevent cross-thread data races
+                self.host_found.emit(copy.deepcopy(device))
 
             self.progress.emit("Discovery complete", 100)
             self.finished.emit(result)
@@ -57,7 +60,7 @@ class DiscoveryWorker(QThread):
             self.error.emit(str(e))
 
     def abort(self) -> None:
-        self._abort = True
+        self._abort_event.set()
 
 
 class FullScanWorker(QThread):
@@ -65,11 +68,11 @@ class FullScanWorker(QThread):
 
     Supports 3 scan depth profiles (Quick/Standard/Deep) and optional
     automatic vulnerability scanning after host discovery.
+    Supports pause/resume via threading.Event.
     """
     progress = Signal(str, int)
     host_found = Signal(object)
     host_updated = Signal(object)
-    # Emitted when auto-vuln is enabled and vuln scan starts
     vuln_phase_started = Signal()
     vuln_found = Signal(object)        # Vulnerability
     finished = Signal(object)          # ScanResult
@@ -81,7 +84,29 @@ class FullScanWorker(QThread):
         self._config = config or ScanConfig()
         self._scanner = LanScanner(self._config)
         self._classifier = DeviceClassifier()
-        self._abort = False
+        self._abort_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._pause_event.set()  # start unpaused
+
+    @property
+    def is_paused(self) -> bool:
+        return not self._pause_event.is_set()
+
+    def pause(self) -> None:
+        """Pause scanning. Blocks worker thread at next checkpoint."""
+        self._pause_event.clear()
+
+    def resume(self) -> None:
+        """Resume scanning."""
+        self._pause_event.set()
+
+    def _wait_if_paused(self) -> bool:
+        """Block until unpaused. Returns False if abort requested during pause."""
+        while not self._pause_event.is_set():
+            if self._abort_event.is_set():
+                return False
+            self._pause_event.wait(0.5)
+        return not self._abort_event.is_set()
 
     def run(self) -> None:
         try:
@@ -93,7 +118,7 @@ class FullScanWorker(QThread):
                                f"Host discovery ({depth_label})...", 2)
             discovery = self._scanner.discover_hosts(self.target)
 
-            if self._abort:
+            if self._abort_event.is_set():
                 return
 
             total = len(discovery.devices)
@@ -103,15 +128,14 @@ class FullScanWorker(QThread):
                 return
 
             for device in discovery.devices:
-                self.host_found.emit(device)
+                self.host_found.emit(copy.deepcopy(device))
 
             # === Phase 2: Detailed scan per host ===
             phase_count = "3" if self._config.auto_vuln_scan else "2"
             for i, device in enumerate(discovery.devices):
-                if self._abort:
+                if not self._wait_if_paused():
                     return
 
-                # Calculate progress: phase 2 = 10%-70% (or 10%-50% if auto-vuln)
                 phase2_end = 50 if self._config.auto_vuln_scan else 90
                 pct = 10 + int((i / total) * (phase2_end - 10))
                 self.progress.emit(
@@ -138,10 +162,10 @@ class FullScanWorker(QThread):
 
                 # Classify device type
                 self._classifier.classify(device)
-                self.host_updated.emit(device)
+                self.host_updated.emit(copy.deepcopy(device))
 
             # === Phase 3 (optional): Auto vulnerability scan ===
-            if self._config.auto_vuln_scan and not self._abort:
+            if self._config.auto_vuln_scan and not self._abort_event.is_set():
                 self.vuln_phase_started.emit()
                 self._run_vuln_phase(discovery.devices, total)
 
@@ -156,12 +180,11 @@ class FullScanWorker(QThread):
         """Phase 3: Automated vulnerability scanning."""
         vuln_scanner = VulnerabilityScanner(timeout=self._config.host_timeout)
 
-        # Initialize Vulners if API key is available
         if self._config.vulners_api_key:
             vuln_scanner.init_vulners(self._config.vulners_api_key)
 
         for i, device in enumerate(devices):
-            if self._abort:
+            if self._abort_event.is_set():
                 return
 
             pct = 55 + int((i / total) * 40)
@@ -174,7 +197,7 @@ class FullScanWorker(QThread):
                 self.vuln_found.emit(v)
 
     def abort(self) -> None:
-        self._abort = True
+        self._abort_event.set()
 
 
 class VulnScanWorker(QThread):
@@ -189,9 +212,8 @@ class VulnScanWorker(QThread):
         self.devices = devices
         self._config = config or ScanConfig()
         self._scanner = VulnerabilityScanner(timeout=self._config.host_timeout)
-        self._abort = False
+        self._abort_event = threading.Event()
 
-        # Initialize Vulners if API key available
         if self._config.vulners_api_key:
             self._scanner.init_vulners(self._config.vulners_api_key)
 
@@ -201,7 +223,7 @@ class VulnScanWorker(QThread):
             total = len(self.devices)
 
             for i, device in enumerate(self.devices):
-                if self._abort:
+                if self._abort_event.is_set():
                     return
 
                 pct = int((i / total) * 100)
@@ -220,7 +242,7 @@ class VulnScanWorker(QThread):
             self.error.emit(str(e))
 
     def abort(self) -> None:
-        self._abort = True
+        self._abort_event.set()
 
 
 class CameraAuditWorker(QThread):
@@ -235,20 +257,20 @@ class CameraAuditWorker(QThread):
         self.devices = devices
         self._config = config or ScanConfig()
         self._auditor = CameraAuditor(timeout=self._config.host_timeout)
-        self._abort = False
+        self._abort_event = threading.Event()
 
     def run(self) -> None:
         try:
             total = len(self.devices)
             for i, device in enumerate(self.devices):
-                if self._abort:
+                if self._abort_event.is_set():
                     return
 
                 pct = int((i / total) * 100)
                 self.progress.emit(f"Auditing camera {device.ip} ({i+1}/{total})...", pct)
 
                 result = self._auditor.audit_camera(device)
-                self.result_ready.emit(device, result)
+                self.result_ready.emit(copy.deepcopy(device), result)
 
             self.progress.emit("Camera audit complete", 100)
             self.finished.emit()
@@ -258,7 +280,7 @@ class CameraAuditWorker(QThread):
             self.error.emit(str(e))
 
     def abort(self) -> None:
-        self._abort = True
+        self._abort_event.set()
 
 
 class PcAuditWorker(QThread):
@@ -273,20 +295,20 @@ class PcAuditWorker(QThread):
         self.devices = devices
         self._config = config or ScanConfig()
         self._auditor = PcAuditor(timeout=self._config.host_timeout)
-        self._abort = False
+        self._abort_event = threading.Event()
 
     def run(self) -> None:
         try:
             total = len(self.devices)
             for i, device in enumerate(self.devices):
-                if self._abort:
+                if self._abort_event.is_set():
                     return
 
                 pct = int((i / total) * 100)
                 self.progress.emit(f"Auditing PC {device.ip} ({i+1}/{total})...", pct)
 
                 result = self._auditor.audit_pc(device)
-                self.result_ready.emit(device, result)
+                self.result_ready.emit(copy.deepcopy(device), result)
 
             self.progress.emit("PC audit complete", 100)
             self.finished.emit()
@@ -296,7 +318,7 @@ class PcAuditWorker(QThread):
             self.error.emit(str(e))
 
     def abort(self) -> None:
-        self._abort = True
+        self._abort_event.set()
 
 
 class HostScanWorker(QThread):
@@ -319,7 +341,7 @@ class HostScanWorker(QThread):
         self._vuln_scan = vuln_scan
         self._scanner = LanScanner(self._config)
         self._classifier = DeviceClassifier()
-        self._abort = False
+        self._abort_event = threading.Event()
 
     def run(self) -> None:
         try:
@@ -329,7 +351,7 @@ class HostScanWorker(QThread):
             grand_total = total + vuln_total
 
             for i, device in enumerate(self._devices):
-                if self._abort:
+                if self._abort_event.is_set():
                     return
 
                 pct = int((i / grand_total) * 100) if grand_total else 0
@@ -356,16 +378,16 @@ class HostScanWorker(QThread):
 
                 self._classifier.classify(device)
                 device.update_risk_level()
-                self.host_updated.emit(device)
+                self.host_updated.emit(copy.deepcopy(device))
 
             # Optional vuln scan phase
-            if self._vuln_scan and not self._abort:
+            if self._vuln_scan and not self._abort_event.is_set():
                 vuln_scanner = VulnerabilityScanner(timeout=self._config.host_timeout)
                 if self._config.vulners_api_key:
                     vuln_scanner.init_vulners(self._config.vulners_api_key)
 
                 for i, device in enumerate(self._devices):
-                    if self._abort:
+                    if self._abort_event.is_set():
                         return
 
                     pct = int(((total + i) / grand_total) * 100) if grand_total else 0
@@ -384,7 +406,7 @@ class HostScanWorker(QThread):
             self.error.emit(str(e))
 
     def abort(self) -> None:
-        self._abort = True
+        self._abort_event.set()
 
 
 class UpdateWorker(QThread):

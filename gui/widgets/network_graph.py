@@ -199,6 +199,9 @@ class NetworkGraph(QGraphicsView):
     device_scan_deep = Signal(object)       # Device
     device_vuln_scan = Signal(object)       # Device
     device_send_to_msf = Signal(object)     # Device
+    device_send_to_attack = Signal(object)  # Device
+    device_web_scan = Signal(object)        # Device
+    device_brute_force = Signal(object)     # Device
     device_remove = Signal(object)          # Device
 
     def __init__(self, parent=None):
@@ -217,23 +220,59 @@ class NetworkGraph(QGraphicsView):
         self._nodes: dict[str, DeviceNode] = {}  # ip -> node
         self._gateway_ip: str = ""
 
+        # Empty state placeholder
+        self._empty_label = QGraphicsTextItem()
+        self._empty_label.setPlainText(tr("No devices discovered yet.\nSelect an interface and start a scan."))
+        self._empty_label.setDefaultTextColor(QColor("#404050"))
+        self._empty_label.setFont(QFont("Segoe UI", 14))
+        rect = self._empty_label.boundingRect()
+        self._empty_label.setPos(-rect.width() / 2, -rect.height() / 2)
+        self._scene.addItem(self._empty_label)
+
     def set_gateway(self, ip: str) -> None:
         self._gateway_ip = ip
 
+    def _calc_position(self, device: Device) -> tuple[float, float]:
+        """Calculate node position with subnet clustering."""
+        if device.device_type == DeviceType.ROUTER or device.ip == self._gateway_ip:
+            return 0.0, 0.0
+
+        # Group by /24 subnet — each subnet gets its own ring sector
+        parts = device.ip.rsplit(".", 1)
+        subnet = parts[0] if len(parts) == 2 else device.ip
+
+        # Count nodes in same subnet
+        subnet_nodes = [ip for ip in self._nodes if ip.rsplit(".", 1)[0] == subnet]
+        subnet_idx = len(subnet_nodes)
+
+        # Count distinct subnets
+        all_subnets = list({ip.rsplit(".", 1)[0] for ip in self._nodes if ip != self._gateway_ip})
+        if subnet not in all_subnets:
+            all_subnets.append(subnet)
+        subnet_count = max(len(all_subnets), 1)
+        my_subnet_idx = all_subnets.index(subnet) if subnet in all_subnets else 0
+
+        # Sector for this subnet
+        sector_start = (my_subnet_idx * 2 * math.pi) / subnet_count
+        sector_width = (2 * math.pi) / subnet_count
+
+        # Position within sector
+        angle = sector_start + (subnet_idx + 1) * sector_width / max(subnet_idx + 3, 4)
+        radius = 140 + subnet_idx * 25 + random.randint(-10, 10)
+
+        return radius * math.cos(angle), radius * math.sin(angle)
+
     def add_device(self, device: Device) -> None:
         """Add a device to the graph."""
+        # Remove empty state label on first device
+        if self._empty_label and self._empty_label.scene():
+            self._scene.removeItem(self._empty_label)
+            self._empty_label = None
+
         if device.ip in self._nodes:
             return
 
-        # Calculate position
-        if device.device_type == DeviceType.ROUTER or device.ip == self._gateway_ip:
-            x, y = 0.0, 0.0
-        else:
-            count = len(self._nodes)
-            angle = (count * 2 * math.pi) / max(count + 5, 8)
-            radius = 150 + random.randint(-30, 30)
-            x = radius * math.cos(angle)
-            y = radius * math.sin(angle)
+        x, y = self._calc_position(device)
 
         node = DeviceNode(device, x, y)
         self._scene.addItem(node)
@@ -285,6 +324,14 @@ class NetworkGraph(QGraphicsView):
     def clear_graph(self) -> None:
         self._scene.clear()
         self._nodes.clear()
+        # Re-add empty state
+        self._empty_label = QGraphicsTextItem()
+        self._empty_label.setPlainText(tr("No devices discovered yet.\nSelect an interface and start a scan."))
+        self._empty_label.setDefaultTextColor(QColor("#404050"))
+        self._empty_label.setFont(QFont("Segoe UI", 14))
+        rect = self._empty_label.boundingRect()
+        self._empty_label.setPos(-rect.width() / 2, -rect.height() / 2)
+        self._scene.addItem(self._empty_label)
 
     def fit_view(self) -> None:
         self.fitInView(self._scene.sceneRect().adjusted(-50, -50, 50, 50),
@@ -336,6 +383,13 @@ class NetworkGraph(QGraphicsView):
 
         menu.addAction(tr("Vulnerability Scan"), lambda: self.device_vuln_scan.emit(device))
         menu.addSeparator()
+
+        # Attack submenu
+        attack_menu = menu.addMenu(tr("Attack"))
+        attack_menu.addAction(tr("MITM (ARP Spoof)"), lambda: self.device_send_to_attack.emit(device))
+        attack_menu.addAction(tr("Web Scan"), lambda: self.device_web_scan.emit(device))
+        attack_menu.addAction(tr("Brute-Force"), lambda: self.device_brute_force.emit(device))
+
         menu.addAction(tr("Send to Metasploit"), lambda: self.device_send_to_msf.emit(device))
         menu.addSeparator()
         menu.addAction(tr("Copy IP"), lambda: QApplication.clipboard().setText(device.ip))
@@ -366,5 +420,5 @@ class NetworkGraph(QGraphicsView):
         super().mousePressEvent(event)
 
     def wheelEvent(self, event) -> None:
-        factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
+        factor = 1.08 if event.angleDelta().y() > 0 else 1 / 1.08
         self.scale(factor, factor)

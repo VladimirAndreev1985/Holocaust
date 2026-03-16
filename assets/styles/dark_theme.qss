@@ -89,8 +89,14 @@ QPushButton:pressed {
 
 QPushButton:disabled {
     background-color: #0b0b0f;
-    color: #404050;
+    color: #505060;
     border-color: #18181e;
+}
+
+QPushButton:checked {
+    background-color: #2a3848;
+    color: #8ca8c4;
+    border: 1px solid #5a7ea0;
 }
 
 QPushButton#primaryButton {
@@ -133,12 +139,12 @@ QPushButton#successButton:hover {
 /* === Tables === */
 QTableWidget, QTableView {
     background-color: #0b0b0f;
-    alternate-background-color: #0f0f14;
+    alternate-background-color: #131318;
     gridline-color: #252530;
     border: 1px solid #252530;
     border-radius: 4px;
-    selection-background-color: #1a2530;
-    selection-color: #8ca8c4;
+    selection-background-color: #1e3048;
+    selection-color: #c0d0e0;
 }
 
 QHeaderView::section {
@@ -156,7 +162,7 @@ QTableWidget::item {
 }
 
 QTableWidget::item:selected {
-    background-color: #1a2530;
+    background-color: #1e3048;
 }
 
 /* === Tree Widget === */
@@ -399,6 +405,23 @@ QLabel#statNumber {
     font-size: 28px;
     font-weight: bold;
     color: #8ca8c4;
+}
+
+/* === Dialogs === */
+QDialog, QMessageBox {
+    background-color: #111116;
+    color: #b0b0b8;
+}
+
+QMessageBox QLabel {
+    color: #b0b0b8;
+    font-size: 13px;
+    min-width: 300px;
+}
+
+QMessageBox QPushButton {
+    min-width: 80px;
+    padding: 8px 20px;
 }
 
 /* === CheckBox === */
