@@ -125,7 +125,7 @@ class DashboardTab(QWidget):
         self._depth_combo.addItem(tr("Quick Scan"), ScanDepth.QUICK.value)
         self._depth_combo.addItem(tr("Standard Scan"), ScanDepth.STANDARD.value)
         self._depth_combo.addItem(tr("Deep Scan"), ScanDepth.DEEP.value)
-        self._depth_combo.setCurrentIndex(1)  # Standard by default
+        self._depth_combo.setCurrentIndex(0)  # Quick by default
         self._depth_combo.setMinimumWidth(220)
         self._depth_combo.setToolTip(tr(
             "Quick — top 100 ports, fast detection\n"
@@ -135,7 +135,7 @@ class DashboardTab(QWidget):
 
         self._scan_btn = QPushButton()
         self._scan_btn.setObjectName("primaryButton")
-        self._scan_btn.setMinimumWidth(200)
+        self._scan_btn.setMinimumWidth(250)
         self._scan_btn.clicked.connect(self._on_scan_clicked)
         self._depth_combo.currentIndexChanged.connect(self._update_scan_btn_text)
         self._update_scan_btn_text()
