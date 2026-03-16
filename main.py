@@ -35,7 +35,63 @@ def init_databases() -> None:
     init_databases()
 
 
-def check_dependencies() -> None:
+def ensure_python_packages() -> None:
+    """Auto-install missing Python packages — GUI can't start without them."""
+    import subprocess
+
+    REQUIRED = [
+        ("PySide6", "PySide6"),
+        ("nmap", "python-nmap"),
+        ("scapy", "scapy"),
+        ("psutil", "psutil"),
+        ("requests", "requests"),
+        ("jinja2", "jinja2"),
+    ]
+
+    OPTIONAL = [
+        ("vulners", "vulners"),
+        ("pymsf", "pymsf"),
+        ("xhtml2pdf", "xhtml2pdf"),
+    ]
+
+    missing = []
+    for import_name, pip_name in REQUIRED:
+        try:
+            __import__(import_name)
+        except ImportError:
+            missing.append(pip_name)
+
+    if missing:
+        print(f"[*] Installing required packages: {', '.join(missing)}")
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--break-system-packages", *missing],
+            stdout=sys.stdout, stderr=sys.stderr,
+        )
+        print("[+] Required packages installed")
+
+    # Optional — install silently, don't fail if they don't work
+    opt_missing = []
+    for import_name, pip_name in OPTIONAL:
+        try:
+            __import__(import_name)
+        except ImportError:
+            opt_missing.append(pip_name)
+
+    if opt_missing:
+        print(f"[*] Installing optional packages: {', '.join(opt_missing)}")
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "--break-system-packages", *opt_missing],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            print("[+] Optional packages installed")
+        except subprocess.CalledProcessError:
+            print(f"[!] Some optional packages failed to install: {', '.join(opt_missing)}")
+            print("    You can install them later via Settings tab.")
+
+
+def check_system_tools() -> None:
+    """Check system tools (nmap, aircrack, etc.) — report missing, don't auto-install."""
     from core.logger import get_logger
     log = get_logger("startup")
 
@@ -46,11 +102,8 @@ def check_dependencies() -> None:
     if missing:
         names = ", ".join(d.name for d in missing)
         log.warning(f"Missing system tools: {names}")
-        log.info("These will be needed for full functionality. Install via Settings tab.")
-
-    missing_py = dm.check_python_packages()
-    if missing_py:
-        log.warning(f"Missing Python packages: {', '.join(missing_py)}")
+        log.info("Install them via: sudo apt install " + " ".join(d.package for d in missing))
+        log.info("Or use the Settings tab to install with one click.")
 
 
 def main() -> int:
@@ -61,7 +114,11 @@ def main() -> int:
         # Windows doesn't have geteuid
         pass
 
-    # Init logging
+    # Step 1: Auto-install Python packages (before any project imports)
+    print("[*] Checking Python dependencies...")
+    ensure_python_packages()
+
+    # Step 2: Init logging (now PySide6 is guaranteed available)
     emitter = init_logging()
 
     from core.logger import get_logger
@@ -70,12 +127,12 @@ def main() -> int:
     log.info("  Holocaust Network Auditor — Starting...")
     log.info("=" * 50)
 
-    # Init databases
+    # Step 3: Init databases
     init_databases()
     log.info("Databases initialized")
 
-    # Check dependencies
-    check_dependencies()
+    # Step 4: Check system tools (report only, don't block)
+    check_system_tools()
 
     # Launch GUI
     log.info("Launching GUI...")
