@@ -73,6 +73,23 @@ def ensure_python_packages() -> None:
         )
         print("[+] Required packages installed")
 
+        # Verify critical imports — if still broken, force-reinstall
+        still_broken = set()
+        for import_name, pip_name in REQUIRED:
+            try:
+                __import__(import_name)
+            except ImportError:
+                still_broken.add(pip_name)
+
+        if still_broken:
+            print(f"[!] Broken installs detected, force-reinstalling: {', '.join(still_broken)}")
+            subprocess.check_call(
+                [sys.executable, "-m", "pip", "install", "--break-system-packages",
+                 "--force-reinstall", *still_broken],
+                stdout=sys.stdout, stderr=sys.stderr,
+            )
+            print("[+] Force-reinstall complete")
+
     # Optional — install silently, don't fail if they don't work
     opt_missing = []
     for import_name, pip_name in OPTIONAL:
