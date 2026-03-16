@@ -85,6 +85,7 @@ class DashboardTab(QWidget):
     scan_stop_requested = Signal()
     scan_pause_requested = Signal()
     scan_resume_requested = Signal()
+    auto_audit_requested = Signal(str)  # target CIDR
     stat_filter_requested = Signal(str)  # filter_key: "all", "cameras", "pcs", "vulns", "critical"
     device_selected = Signal(object)
     device_inspect = Signal(object)
@@ -140,6 +141,28 @@ class DashboardTab(QWidget):
         self._depth_combo.currentIndexChanged.connect(self._update_scan_btn_text)
         self._update_scan_btn_text()
 
+        self._auto_audit_btn = QPushButton(tr("Auto-Audit"))
+        self._auto_audit_btn.setMinimumWidth(120)
+        self._auto_audit_btn.setToolTip(tr(
+            "Full automated audit pipeline:\n"
+            "Deep Scan → Vuln Scan → Report\n"
+            "One click to do everything."
+        ))
+        self._auto_audit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #c04848;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 14px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover { background-color: #d05858; }
+            QPushButton:disabled { background-color: #555; }
+        """)
+        self._auto_audit_btn.clicked.connect(self._on_auto_audit)
+
         self._pause_btn = QPushButton(tr("Pause"))
         self._pause_btn.setFixedWidth(80)
         self._pause_btn.setVisible(False)
@@ -151,6 +174,7 @@ class DashboardTab(QWidget):
         top_bar.addWidget(self._target_input)
         top_bar.addWidget(self._depth_combo)
         top_bar.addWidget(self._scan_btn)
+        top_bar.addWidget(self._auto_audit_btn)
         top_bar.addWidget(self._pause_btn)
         layout.addLayout(top_bar)
 
@@ -245,6 +269,7 @@ class DashboardTab(QWidget):
         self._depth_combo.setEnabled(enabled)
         self._auto_vuln.setEnabled(enabled)
         self._auto_report.setEnabled(enabled)
+        self._auto_audit_btn.setEnabled(enabled)
         self._scanning = not enabled
         self._pause_btn.setVisible(not enabled)
         if enabled:
@@ -341,6 +366,24 @@ class DashboardTab(QWidget):
             self._pause_btn.style().unpolish(self._pause_btn)
             self._pause_btn.style().polish(self._pause_btn)
             self.scan_resume_requested.emit()
+
+    def _on_auto_audit(self) -> None:
+        """Start full automated audit: Deep Scan + Vuln Scan + Report."""
+        target = self._target_input.text().strip()
+        if not target:
+            iface = self._interface_combo.currentData()
+            if iface and iface.cidr:
+                target = iface.cidr
+            elif iface and iface.ip_address:
+                parts = iface.ip_address.rsplit(".", 1)
+                target = f"{parts[0]}.0/24"
+            self._target_input.setText(target)
+        if target:
+            # Force deep + auto-vuln + auto-report
+            self._depth_combo.setCurrentIndex(2)  # Deep
+            self._auto_vuln.setChecked(True)
+            self._auto_report.setChecked(True)
+            self.auto_audit_requested.emit(target)
 
     def _on_scan_clicked(self) -> None:
         # If scanning, this button acts as stop

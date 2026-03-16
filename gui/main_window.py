@@ -492,6 +492,23 @@ class MainWindow(QMainWindow):
         self._vuln_count_label = QLabel(tr("Vulns: {count}").format(count=0))
         self._statusbar.addPermanentWidget(self._vuln_count_label)
 
+        # Post-scan suggestion button (hidden by default)
+        self._suggestion_btn = QPushButton()
+        self._suggestion_btn.setVisible(False)
+        self._suggestion_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2a3a4a;
+                color: #8cb4d8;
+                border: 1px solid #5a7ea0;
+                border-radius: 3px;
+                padding: 2px 10px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: #3a4a5a; }
+        """)
+        self._statusbar.addWidget(self._suggestion_btn)
+
         self._msf_status_label = QLabel(tr("MSF: disconnected"))
         self._msf_status_label.setStyleSheet("color: #a05050;")
         self._statusbar.addPermanentWidget(self._msf_status_label)
@@ -548,6 +565,7 @@ class MainWindow(QMainWindow):
         self._dashboard.scan_stop_requested.connect(self._stop_full_scan)
         self._dashboard.scan_pause_requested.connect(self._pause_full_scan)
         self._dashboard.scan_resume_requested.connect(self._resume_full_scan)
+        self._dashboard.auto_audit_requested.connect(self._start_auto_audit)
         self._dashboard.device_selected.connect(self._on_device_selected)
         self._dashboard.device_inspect.connect(self._on_device_inspect)
         self._dashboard.stat_filter_requested.connect(self._on_stat_filter)
@@ -623,6 +641,14 @@ class MainWindow(QMainWindow):
         self._detail_panel.close_requested.connect(
             lambda: self._detail_panel.setVisible(False))
         self._detail_panel.exploit_requested.connect(self._on_device_exploit)
+        self._detail_panel.rescan_requested.connect(
+            lambda d, depth: self._scan_single_host(d, ScanDepth(depth)))
+        self._detail_panel.vuln_scan_requested.connect(
+            lambda d: self._start_vuln_scan([d]))
+        self._detail_panel.send_to_msf_requested.connect(self._send_device_to_msf)
+        self._detail_panel.send_to_attack_requested.connect(self._send_device_to_attack)
+        self._detail_panel.brute_force_requested.connect(self._detail_brute_force)
+        self._detail_panel.web_scan_requested.connect(self._detail_web_scan)
 
     def _init_state(self) -> None:
         """Initialize application state on startup."""
@@ -678,6 +704,7 @@ class MainWindow(QMainWindow):
                  f"speed={config.speed_flag}, auto_vuln={config.auto_vuln_scan})")
 
         self._status_label.setText(tr("Scanning {target}...").format(target=target))
+        self._suggestion_btn.setVisible(False)
         self._progress.setVisible(True)
         self._progress.setValue(0)
         self._dashboard.set_scan_enabled(False)
@@ -763,6 +790,79 @@ class MainWindow(QMainWindow):
         if config.auto_report and self._devices:
             log.info("Auto-generating HTML report...")
             self._generate_html_report()
+
+        # Post-scan suggestion
+        self._show_post_scan_suggestion()
+
+    def _show_post_scan_suggestion(self) -> None:
+        """Show actionable suggestion button in status bar after scan completes."""
+        count = len(self._devices)
+        if count == 0:
+            self._suggestion_btn.setVisible(False)
+            return
+
+        has_vulns = len(self._vulns) > 0
+        if not has_vulns:
+            # Suggest vuln scan
+            self._suggestion_btn.setText(
+                tr("{count} hosts found — Run Vuln Scan?").format(count=count)
+            )
+            try:
+                self._suggestion_btn.clicked.disconnect()
+            except RuntimeError:
+                pass
+            self._suggestion_btn.clicked.connect(self._suggest_vuln_scan)
+        else:
+            # Suggest report generation
+            self._suggestion_btn.setText(
+                tr("{vulns} vulns found — Generate Report?").format(vulns=len(self._vulns))
+            )
+            try:
+                self._suggestion_btn.clicked.disconnect()
+            except RuntimeError:
+                pass
+            self._suggestion_btn.clicked.connect(self._suggest_report)
+        self._suggestion_btn.setVisible(True)
+
+    def _suggest_vuln_scan(self) -> None:
+        """Start vuln scan on all discovered devices from suggestion button."""
+        self._suggestion_btn.setVisible(False)
+        devices = list(self._devices.values())
+        if devices:
+            self._start_vuln_scan(devices)
+
+    def _suggest_report(self) -> None:
+        """Generate report from suggestion button."""
+        self._suggestion_btn.setVisible(False)
+        self._generate_html_report()
+
+    @Slot(str)
+    def _start_auto_audit(self, target: str) -> None:
+        """Full automated audit: Deep Scan with auto vuln scan + auto report."""
+        if self._scan_worker and self._scan_worker.isRunning():
+            QMessageBox.warning(self, tr("Scan Running"), tr("A scan is already in progress."))
+            return
+
+        log.info(f"Starting Auto-Audit on {target} (Deep + Vuln + Report)")
+        self._status_label.setText(tr("Auto-Audit: {target}...").format(target=target))
+
+        # Build config with deep scan + all auto options forced on
+        config = self._build_scan_config(ScanDepth.DEEP)
+        config.auto_vuln_scan = True
+        config.auto_report = True
+
+        self._progress.setVisible(True)
+        self._progress.setValue(0)
+        self._dashboard.set_scan_enabled(False)
+
+        self._scan_worker = FullScanWorker(target, config)
+        self._scan_worker.progress.connect(self._on_scan_progress)
+        self._scan_worker.host_found.connect(self._on_host_found)
+        self._scan_worker.host_updated.connect(self._on_host_updated)
+        self._scan_worker.vuln_found.connect(self._on_vuln_found)
+        self._scan_worker.finished.connect(self._on_scan_finished)
+        self._scan_worker.error.connect(self._on_scan_error)
+        self._scan_worker.start()
 
     @Slot(str)
     def _on_scan_error(self, error: str) -> None:
@@ -941,9 +1041,24 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_device_inspect(self, device: Device) -> None:
-        device_vulns = [v for v in self._vulns if v.host_ip == device.ip]
-        self._detail_panel.show_device(device, device_vulns)
+        # Always show fresh data from _devices dict
+        fresh = self._devices.get(device.ip, device)
+        device_vulns = [v for v in self._vulns if v.host_ip == fresh.ip]
+        self._detail_panel.show_device(fresh, device_vulns)
         self._detail_panel.setVisible(True)
+
+    def _detail_brute_force(self, device: Device, service: str, port: int) -> None:
+        """Launch brute-force from detail panel service row."""
+        self._attack_tab.brute_force.set_target(device.ip, port, service)
+        self._tabs.setCurrentWidget(self._attack_tab)
+        self._attack_tab.switch_to_brute()
+
+    def _detail_web_scan(self, device: Device, port: int) -> None:
+        """Launch web scan from detail panel service row."""
+        use_ssl = port in (443, 8443)
+        self._attack_tab.web.set_target(device.ip, port)
+        self._tabs.setCurrentWidget(self._attack_tab)
+        self._attack_tab.switch_to_web()
 
     def _add_device_card(self, device: Device) -> None:
         card = DeviceCard(device)
