@@ -90,6 +90,78 @@ def ensure_python_packages() -> None:
             print("    You can install them later via Settings tab.")
 
 
+def auto_update_databases(log) -> None:
+    """Auto-update security databases on startup if enabled in settings."""
+    import configparser
+    import shutil
+
+    config = configparser.ConfigParser()
+    config_path = PROJECT_ROOT / "config" / "settings.ini"
+    if config_path.exists():
+        config.read(config_path)
+
+    if not config.getboolean("general", "auto_update", fallback=True):
+        log.info("Auto-update disabled in settings, skipping")
+        return
+
+    log.info("Checking security databases for updates...")
+
+    # 1. Metasploit database
+    if shutil.which("msfupdate"):
+        log.info("Updating Metasploit database (msfupdate)...")
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["sudo", "msfupdate"],
+                capture_output=True, text=True, timeout=300,
+            )
+            if result.returncode == 0:
+                log.info("Metasploit database updated")
+            else:
+                log.warning(f"msfupdate exited with code {result.returncode}")
+        except subprocess.TimeoutExpired:
+            log.warning("msfupdate timed out (5 min limit) — skipping")
+        except Exception as e:
+            log.warning(f"msfupdate failed: {e}")
+    else:
+        log.info("msfupdate not found — skipping Metasploit update")
+
+    # 2. Nmap scripts
+    if shutil.which("nmap"):
+        log.info("Updating Nmap script database...")
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["sudo", "nmap", "--script-updatedb"],
+                capture_output=True, text=True, timeout=60,
+            )
+            if result.returncode == 0:
+                log.info("Nmap scripts updated")
+            else:
+                log.warning(f"nmap --script-updatedb failed: {result.stderr[:200]}")
+        except Exception as e:
+            log.warning(f"Nmap script update failed: {e}")
+    else:
+        log.info("nmap not found — skipping script update")
+
+    # 3. CVE database (fetch recent from NVD)
+    try:
+        import requests
+        log.info("Updating CVE cache from NVD...")
+        resp = requests.get(
+            "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=100",
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            log.info("CVE cache updated from NVD")
+        else:
+            log.warning(f"NVD API returned HTTP {resp.status_code}")
+    except Exception as e:
+        log.warning(f"CVE update failed (network?): {e}")
+
+    log.info("Database update check complete")
+
+
 def check_system_tools() -> None:
     """Check system tools (nmap, aircrack, etc.) — report missing, don't auto-install."""
     from core.logger import get_logger
@@ -133,6 +205,9 @@ def main() -> int:
 
     # Step 4: Check system tools (report only, don't block)
     check_system_tools()
+
+    # Step 5: Auto-update security databases if enabled in settings
+    auto_update_databases(log)
 
     # Launch GUI
     log.info("Launching GUI...")
