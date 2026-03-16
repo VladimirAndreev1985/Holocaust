@@ -8,6 +8,7 @@ from PySide6.QtCore import QThread, Signal
 
 from core.logger import get_logger
 from models.device import Device
+from models.scan_config import ScanConfig, ScanDepth
 from models.scan_result import ScanResult
 from models.vulnerability import Vulnerability
 from modules.device_classifier import DeviceClassifier
@@ -26,10 +27,11 @@ class DiscoveryWorker(QThread):
     finished = Signal(object)       # ScanResult
     error = Signal(str)
 
-    def __init__(self, target: str, parent=None):
+    def __init__(self, target: str, config: ScanConfig | None = None, parent=None):
         super().__init__(parent)
         self.target = target
-        self._scanner = LanScanner()
+        self._config = config or ScanConfig()
+        self._scanner = LanScanner(self._config)
         self._classifier = DeviceClassifier()
         self._abort = False
 
@@ -59,24 +61,36 @@ class DiscoveryWorker(QThread):
 
 
 class FullScanWorker(QThread):
-    """Worker thread for full network audit (discovery + ports + services + classification)."""
+    """Worker thread for full network audit (discovery + ports + services + classification).
+
+    Supports 3 scan depth profiles (Quick/Standard/Deep) and optional
+    automatic vulnerability scanning after host discovery.
+    """
     progress = Signal(str, int)
     host_found = Signal(object)
     host_updated = Signal(object)
-    finished = Signal(object)
+    # Emitted when auto-vuln is enabled and vuln scan starts
+    vuln_phase_started = Signal()
+    vuln_found = Signal(object)        # Vulnerability
+    finished = Signal(object)          # ScanResult
     error = Signal(str)
 
-    def __init__(self, target: str, parent=None):
+    def __init__(self, target: str, config: ScanConfig | None = None, parent=None):
         super().__init__(parent)
         self.target = target
-        self._scanner = LanScanner()
+        self._config = config or ScanConfig()
+        self._scanner = LanScanner(self._config)
         self._classifier = DeviceClassifier()
         self._abort = False
 
     def run(self) -> None:
         try:
-            # Phase 1: Discovery
-            self.progress.emit("Phase 1: Host discovery...", 5)
+            depth = self._config.depth
+            depth_label = depth.value.upper()
+
+            # === Phase 1: Host Discovery ===
+            self.progress.emit(f"Phase 1/{'3' if self._config.auto_vuln_scan else '2'}: "
+                               f"Host discovery ({depth_label})...", 2)
             discovery = self._scanner.discover_hosts(self.target)
 
             if self._abort:
@@ -91,19 +105,23 @@ class FullScanWorker(QThread):
             for device in discovery.devices:
                 self.host_found.emit(device)
 
-            # Phase 2: Full scan each host
+            # === Phase 2: Detailed scan per host ===
+            phase_count = "3" if self._config.auto_vuln_scan else "2"
             for i, device in enumerate(discovery.devices):
                 if self._abort:
                     return
 
-                pct = 10 + int((i / total) * 80)
+                # Calculate progress: phase 2 = 10%-70% (or 10%-50% if auto-vuln)
+                phase2_end = 50 if self._config.auto_vuln_scan else 90
+                pct = 10 + int((i / total) * (phase2_end - 10))
                 self.progress.emit(
-                    f"Phase 2: Scanning {device.ip} ({i+1}/{total})...", pct
+                    f"Phase 2/{phase_count}: {depth_label} scan "
+                    f"{device.ip} ({i+1}/{total})...", pct
                 )
 
-                detailed = self._scanner.scan_single_host(device.ip)
+                detailed = self._scanner.scan_host(device.ip)
 
-                # Merge data
+                # Merge data from detailed scan into discovery device
                 device.services = detailed.services
                 device.open_ports = detailed.open_ports
                 device.os_name = detailed.os_name
@@ -118,9 +136,14 @@ class FullScanWorker(QThread):
                 if detailed.hostname:
                     device.hostname = detailed.hostname
 
-                # Classify
+                # Classify device type
                 self._classifier.classify(device)
                 self.host_updated.emit(device)
+
+            # === Phase 3 (optional): Auto vulnerability scan ===
+            if self._config.auto_vuln_scan and not self._abort:
+                self.vuln_phase_started.emit()
+                self._run_vuln_phase(discovery.devices, total)
 
             self.progress.emit("Scan complete", 100)
             self.finished.emit(discovery)
@@ -128,6 +151,27 @@ class FullScanWorker(QThread):
         except Exception as e:
             log.error(f"Full scan worker error: {e}")
             self.error.emit(str(e))
+
+    def _run_vuln_phase(self, devices: list[Device], total: int) -> None:
+        """Phase 3: Automated vulnerability scanning."""
+        vuln_scanner = VulnerabilityScanner(timeout=self._config.host_timeout)
+
+        # Initialize Vulners if API key is available
+        if self._config.vulners_api_key:
+            vuln_scanner.init_vulners(self._config.vulners_api_key)
+
+        for i, device in enumerate(devices):
+            if self._abort:
+                return
+
+            pct = 55 + int((i / total) * 40)
+            self.progress.emit(
+                f"Phase 3/3: Vuln scan {device.ip} ({i+1}/{total})...", pct
+            )
+
+            vulns = vuln_scanner.scan_device(device)
+            for v in vulns:
+                self.vuln_found.emit(v)
 
     def abort(self) -> None:
         self._abort = True
@@ -140,11 +184,16 @@ class VulnScanWorker(QThread):
     finished = Signal(list)        # list[Vulnerability]
     error = Signal(str)
 
-    def __init__(self, devices: list[Device], parent=None):
+    def __init__(self, devices: list[Device], config: ScanConfig | None = None, parent=None):
         super().__init__(parent)
         self.devices = devices
-        self._scanner = VulnerabilityScanner()
+        self._config = config or ScanConfig()
+        self._scanner = VulnerabilityScanner(timeout=self._config.host_timeout)
         self._abort = False
+
+        # Initialize Vulners if API key available
+        if self._config.vulners_api_key:
+            self._scanner.init_vulners(self._config.vulners_api_key)
 
     def run(self) -> None:
         try:
@@ -181,10 +230,11 @@ class CameraAuditWorker(QThread):
     finished = Signal()
     error = Signal(str)
 
-    def __init__(self, devices: list[Device], parent=None):
+    def __init__(self, devices: list[Device], config: ScanConfig | None = None, parent=None):
         super().__init__(parent)
         self.devices = devices
-        self._auditor = CameraAuditor()
+        self._config = config or ScanConfig()
+        self._auditor = CameraAuditor(timeout=self._config.host_timeout)
         self._abort = False
 
     def run(self) -> None:
@@ -218,10 +268,11 @@ class PcAuditWorker(QThread):
     finished = Signal()
     error = Signal(str)
 
-    def __init__(self, devices: list[Device], parent=None):
+    def __init__(self, devices: list[Device], config: ScanConfig | None = None, parent=None):
         super().__init__(parent)
         self.devices = devices
-        self._auditor = PcAuditor()
+        self._config = config or ScanConfig()
+        self._auditor = PcAuditor(timeout=self._config.host_timeout)
         self._abort = False
 
     def run(self) -> None:

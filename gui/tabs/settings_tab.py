@@ -121,6 +121,13 @@ class SettingsTab(QWidget):
         scan_group = QGroupBox(tr("Scanning"))
         scan_layout = QFormLayout(scan_group)
 
+        self._default_depth = QComboBox()
+        self._default_depth.addItem(tr("Quick — top 100 ports"), "quick")
+        self._default_depth.addItem(tr("Standard — configured range"), "standard")
+        self._default_depth.addItem(tr("Deep — all ports, aggressive"), "deep")
+        self._default_depth.setCurrentIndex(1)
+        scan_layout.addRow(tr("Default Scan Depth:"), self._default_depth)
+
         self._scan_timeout = QSpinBox()
         self._scan_timeout.setRange(30, 600)
         self._scan_timeout.setValue(120)
@@ -137,6 +144,14 @@ class SettingsTab(QWidget):
         ])
         self._scan_speed.setCurrentIndex(3)
         scan_layout.addRow(tr("Scan Speed:"), self._scan_speed)
+
+        self._auto_vuln_scan = QCheckBox(tr("Auto vuln scan after discovery"))
+        self._auto_vuln_scan.setChecked(False)
+        scan_layout.addRow(self._auto_vuln_scan)
+
+        self._auto_report = QCheckBox(tr("Auto-generate report"))
+        self._auto_report.setChecked(False)
+        scan_layout.addRow(self._auto_report)
 
         layout.addWidget(scan_group)
 
@@ -348,9 +363,15 @@ class SettingsTab(QWidget):
 
             if "scanning" in self._config:
                 s = self._config["scanning"]
+                depth_val = s.get("depth", "standard")
+                idx = self._default_depth.findData(depth_val)
+                if idx >= 0:
+                    self._default_depth.setCurrentIndex(idx)
                 self._scan_timeout.setValue(s.getint("timeout", 120))
                 self._port_range.setText(s.get("port_range", "1-10000"))
                 self._scan_speed.setCurrentIndex(s.getint("speed", 3))
+                self._auto_vuln_scan.setChecked(s.getboolean("auto_vuln_scan", False))
+                self._auto_report.setChecked(s.getboolean("auto_report", False))
 
             if "metasploit" in self._config:
                 m = self._config["metasploit"]
@@ -375,9 +396,12 @@ class SettingsTab(QWidget):
             "language": self._language.currentData(),
         }
         self._config["scanning"] = {
+            "depth": self._default_depth.currentData(),
             "timeout": str(self._scan_timeout.value()),
             "port_range": self._port_range.text(),
             "speed": str(self._scan_speed.currentIndex()),
+            "auto_vuln_scan": str(self._auto_vuln_scan.isChecked()),
+            "auto_report": str(self._auto_report.isChecked()),
         }
         self._config["metasploit"] = {
             "host": self._msf_host.text(),
@@ -416,9 +440,12 @@ class SettingsTab(QWidget):
             "auto_update": self._auto_update.isChecked(),
             "confirm_exploits": self._confirm_exploits.isChecked(),
             "language": self._language.currentData(),
+            "scan_depth": self._default_depth.currentData(),
             "scan_timeout": self._scan_timeout.value(),
             "port_range": self._port_range.text(),
             "scan_speed": self._scan_speed.currentIndex(),
+            "auto_vuln_scan": self._auto_vuln_scan.isChecked(),
+            "auto_report": self._auto_report.isChecked(),
             "msf_host": self._msf_host.text(),
             "msf_port": self._msf_port.value(),
             "msf_password": self._msf_pass.text(),

@@ -5,12 +5,14 @@ from __future__ import annotations
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QGridLayout, QComboBox, QSplitter, QLineEdit,
+    QCheckBox,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
 from gui.widgets.network_graph import NetworkGraph
 from models.device import Device, DeviceType
+from models.scan_config import ScanDepth
 from core.i18n import tr
 
 
@@ -87,6 +89,19 @@ class DashboardTab(QWidget):
             "Examples: 192.168.1.0/24, 10.0.0.1-50, 172.16.0.0/16"
         ))
 
+        # Scan depth selector
+        self._depth_combo = QComboBox()
+        self._depth_combo.addItem(tr("Quick Scan"), ScanDepth.QUICK.value)
+        self._depth_combo.addItem(tr("Standard Scan"), ScanDepth.STANDARD.value)
+        self._depth_combo.addItem(tr("Deep Scan"), ScanDepth.DEEP.value)
+        self._depth_combo.setCurrentIndex(1)  # Standard by default
+        self._depth_combo.setMinimumWidth(150)
+        self._depth_combo.setToolTip(tr(
+            "Quick — top 100 ports, fast detection\n"
+            "Standard — configured port range, OS detection\n"
+            "Deep — all 65535 ports, aggressive audit + auto vuln scan"
+        ))
+
         self._scan_btn = QPushButton(tr("Full Network Audit"))
         self._scan_btn.setObjectName("primaryButton")
         self._scan_btn.setMinimumWidth(200)
@@ -96,8 +111,30 @@ class DashboardTab(QWidget):
         top_bar.addStretch()
         top_bar.addWidget(self._interface_combo)
         top_bar.addWidget(self._target_input)
+        top_bar.addWidget(self._depth_combo)
         top_bar.addWidget(self._scan_btn)
         layout.addLayout(top_bar)
+
+        # Automation options row
+        auto_bar = QHBoxLayout()
+        auto_bar.addStretch()
+
+        self._auto_vuln = QCheckBox(tr("Auto vuln scan after discovery"))
+        self._auto_vuln.setToolTip(tr(
+            "Automatically run vulnerability scan on all discovered hosts\n"
+            "after the network scan completes."
+        ))
+        self._auto_vuln.setStyleSheet("color: #606070;")
+
+        self._auto_report = QCheckBox(tr("Auto-generate report"))
+        self._auto_report.setToolTip(tr(
+            "Automatically generate HTML report after all scans complete."
+        ))
+        self._auto_report.setStyleSheet("color: #606070;")
+
+        auto_bar.addWidget(self._auto_vuln)
+        auto_bar.addWidget(self._auto_report)
+        layout.addLayout(auto_bar)
 
         # Stats row
         stats_layout = QHBoxLayout()
@@ -117,6 +154,21 @@ class DashboardTab(QWidget):
         self.network_graph.device_clicked.connect(self.device_selected.emit)
         self.network_graph.device_double_clicked.connect(self.device_inspect.emit)
         layout.addWidget(self.network_graph, 1)
+
+    # --- Public API ---
+
+    @property
+    def scan_depth(self) -> str:
+        """Return selected scan depth value ('quick', 'standard', 'deep')."""
+        return self._depth_combo.currentData()
+
+    @property
+    def auto_vuln_scan(self) -> bool:
+        return self._auto_vuln.isChecked()
+
+    @property
+    def auto_report(self) -> bool:
+        return self._auto_report.isChecked()
 
     def set_interfaces(self, interfaces: list) -> None:
         self._interface_combo.blockSignals(True)
@@ -145,11 +197,16 @@ class DashboardTab(QWidget):
 
     def set_scan_enabled(self, enabled: bool) -> None:
         self._scan_btn.setEnabled(enabled)
+        self._depth_combo.setEnabled(enabled)
+        self._auto_vuln.setEnabled(enabled)
+        self._auto_report.setEnabled(enabled)
         self._scan_btn.setText(tr("Full Network Audit") if enabled else tr("Scanning..."))
 
     def set_vuln_count(self, total: int, critical: int) -> None:
         self._stat_vulns.set_value(str(total))
         self._stat_critical.set_value(str(critical))
+
+    # --- Private ---
 
     def _update_stats(self) -> None:
         self._stat_hosts.set_value(str(len(self._devices)))

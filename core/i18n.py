@@ -828,6 +828,52 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
 
     # ============================================================
+    #  Scan Depth & Automation
+    # ============================================================
+    "Quick Scan": {
+        "ru": "Быстрое сканирование",
+    },
+    "Standard Scan": {
+        "ru": "Стандартное сканирование",
+    },
+    "Deep Scan": {
+        "ru": "Глубокое сканирование",
+    },
+    "Quick — top 100 ports, fast detection\n"
+    "Standard — configured port range, OS detection\n"
+    "Deep — all 65535 ports, aggressive audit + auto vuln scan": {
+        "ru": "Быстрое — топ 100 портов, быстрое обнаружение\n"
+              "Стандартное — настроенный диапазон портов, определение ОС\n"
+              "Глубокое — все 65535 портов, агрессивный аудит + авто-скан уязвимостей",
+    },
+    "Auto vuln scan after discovery": {
+        "ru": "Авто-скан уязвимостей после обнаружения",
+    },
+    "Automatically run vulnerability scan on all discovered hosts\n"
+    "after the network scan completes.": {
+        "ru": "Автоматически запускать сканирование уязвимостей\n"
+              "для всех обнаруженных хостов после завершения сканирования сети.",
+    },
+    "Auto-generate report": {
+        "ru": "Авто-генерация отчёта",
+    },
+    "Automatically generate HTML report after all scans complete.": {
+        "ru": "Автоматически генерировать HTML-отчёт после завершения всех сканирований.",
+    },
+    "Default Scan Depth:": {
+        "ru": "Глубина сканирования:",
+    },
+    "Quick — top 100 ports": {
+        "ru": "Быстрое — топ 100 портов",
+    },
+    "Standard — configured range": {
+        "ru": "Стандартное — настроенный диапазон",
+    },
+    "Deep — all ports, aggressive": {
+        "ru": "Глубокое — все порты, агрессивное",
+    },
+
+    # ============================================================
     #  Restart notice
     # ============================================================
     "Language changed. Restart the application to apply.": {

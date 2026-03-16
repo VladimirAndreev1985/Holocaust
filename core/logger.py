@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 
@@ -98,13 +99,15 @@ def setup_logging(
         console_handler.setLevel(logging.DEBUG)
         root.addHandler(console_handler)
 
-    # File handler
+    # File handler with rotation (10 MB max, keep 5 backups)
     if log_dir:
         log_dir = Path(log_dir)
         log_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_handler = logging.FileHandler(
-            log_dir / f"holocaust_{timestamp}.log", encoding="utf-8"
+        file_handler = RotatingFileHandler(
+            log_dir / "holocaust.log",
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
         )
         file_handler.setFormatter(fmt)
         file_handler.setLevel(logging.DEBUG)

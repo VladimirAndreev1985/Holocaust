@@ -65,8 +65,9 @@ CRITICAL_PC_CHECKS = [
 class PcAuditor:
     """Targeted security checks for PC/workstation/server systems."""
 
-    def __init__(self) -> None:
+    def __init__(self, timeout: int = 60) -> None:
         self._scanner = nmap.PortScanner()
+        self._timeout = timeout
 
     def audit_pc(self, device: Device) -> dict:
         """Run all PC-specific security checks."""
@@ -126,7 +127,7 @@ class PcAuditor:
                 hosts=device.ip,
                 ports="445",
                 arguments="--script=smb-os-discovery,smb-security-mode,smb2-security-mode -T4",
-                timeout=60,
+                timeout=self._timeout,
             )
 
             host_data = self._scanner[device.ip]
@@ -169,7 +170,7 @@ class PcAuditor:
                 hosts=device.ip,
                 ports="445",
                 arguments="--script=smb-enum-shares -T4",
-                timeout=60,
+                timeout=self._timeout,
             )
 
             host_data = self._scanner[device.ip]
@@ -201,7 +202,7 @@ class PcAuditor:
                 hosts=device.ip,
                 ports="3389",
                 arguments="--script=rdp-enum-encryption,rdp-ntlm-info -T4",
-                timeout=60,
+                timeout=self._timeout,
             )
 
             host_data = self._scanner[device.ip]
@@ -232,7 +233,7 @@ class PcAuditor:
                 hosts=device.ip,
                 ports="22",
                 arguments="--script=ssh2-enum-algos,ssh-auth-methods -T4",
-                timeout=60,
+                timeout=self._timeout,
             )
 
             host_data = self._scanner[device.ip]
@@ -279,7 +280,7 @@ class PcAuditor:
                     hosts=device.ip,
                     ports=check["ports"],
                     arguments=f"--script={check['script']} -T4",
-                    timeout=60,
+                    timeout=self._timeout,
                 )
 
                 host_data = self._scanner[device.ip]

@@ -13,12 +13,12 @@ log = get_logger("metasploit")
 class MetasploitBridge:
     """Interface to Metasploit Framework via msfrpc."""
 
-    def __init__(self) -> None:
+    def __init__(self, host: str = "", port: int = 0, password: str = "") -> None:
         self._client = None
         self._connected = False
-        self._host = "127.0.0.1"
-        self._port = 55553
-        self._password = "msf"
+        self._host = host or "127.0.0.1"
+        self._port = port or 55553
+        self._password = password or "msf"
 
     @property
     def is_connected(self) -> bool:
@@ -139,7 +139,8 @@ class MetasploitBridge:
             # Parse module type and name
             parts = module_path.split("/", 1)
             if len(parts) == 2:
-                mod_type, mod_name = parts[0], module_path
+                mod_type = parts[0]
+                mod_name = parts[1]
             else:
                 mod_type = "exploit"
                 mod_name = module_path

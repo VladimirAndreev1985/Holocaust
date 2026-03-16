@@ -26,6 +26,7 @@ from gui.widgets.detail_panel import DetailPanel
 from gui.widgets.log_panel import LogPanel
 from gui.widgets.device_card import DeviceCard
 from models.device import Device, DeviceType
+from models.scan_config import ScanConfig
 from models.vulnerability import Vulnerability
 from modules.metasploit_bridge import MetasploitBridge
 from reports.generator import ReportGenerator
@@ -61,6 +62,22 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._connect_signals()
         self._init_state()
+
+    def _build_scan_config(self) -> ScanConfig:
+        """Build ScanConfig from current settings + dashboard options."""
+        settings = self._settings_tab.get_settings()
+        config = ScanConfig.from_settings(settings)
+
+        # Override depth/auto from dashboard (live controls take priority)
+        from models.scan_config import ScanDepth
+        try:
+            config.depth = ScanDepth(self._dashboard.scan_depth)
+        except ValueError:
+            pass
+        config.auto_vuln_scan = self._dashboard.auto_vuln_scan
+        config.auto_report = self._dashboard.auto_report
+
+        return config
 
     def _setup_ui(self) -> None:
         # Central widget with splitter
@@ -199,6 +216,7 @@ class MainWindow(QMainWindow):
 
         # Settings
         self._settings_tab.update_databases.connect(self._update_databases)
+        self._settings_tab.settings_saved.connect(self._on_settings_saved)
 
         # Detail panel
         self._detail_panel.close_requested.connect(
@@ -209,6 +227,13 @@ class MainWindow(QMainWindow):
         """Initialize application state on startup."""
         log.info("Holocaust Network Auditor starting...")
         self._refresh_interfaces()
+
+        # Auto-connect to Metasploit if configured
+        settings = self._settings_tab.get_settings()
+        if settings.get("msf_auto_connect"):
+            QTimer.singleShot(1000, lambda: self._connect_metasploit(
+                settings["msf_host"], settings["msf_port"], settings["msf_password"]
+            ))
 
     def _refresh_interfaces(self) -> None:
         interfaces = self._iface_manager.refresh()
@@ -225,6 +250,17 @@ class MainWindow(QMainWindow):
             return f"{ip.rsplit('.', 1)[0]}.0/24"
         return "192.168.1.0/24"
 
+    @Slot(dict)
+    def _on_settings_saved(self, settings: dict) -> None:
+        """Update MSF bridge config when settings change."""
+        self._msf_bridge._host = settings.get("msf_host", "127.0.0.1")
+        self._msf_bridge._port = settings.get("msf_port", 55553)
+        self._msf_bridge._password = settings.get("msf_password", "msf")
+
+        # Update report directory
+        report_dir = settings.get("report_dir", "reports_output")
+        self._report_gen = ReportGenerator(output_dir=Path(report_dir))
+
     # === Scan operations ===
 
     @Slot(str)
@@ -233,16 +269,23 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, tr("Scan Running"), tr("A scan is already in progress."))
             return
 
-        log.info(f"Starting full network scan on {target}")
+        config = self._build_scan_config()
+        depth_label = config.depth.value.upper()
+
+        log.info(f"Starting {depth_label} network scan on {target} "
+                 f"(timeout={config.host_timeout}s, ports={config.port_range}, "
+                 f"speed={config.speed_flag}, auto_vuln={config.auto_vuln_scan})")
+
         self._status_label.setText(tr("Scanning {target}...").format(target=target))
         self._progress.setVisible(True)
         self._progress.setValue(0)
         self._dashboard.set_scan_enabled(False)
 
-        self._scan_worker = FullScanWorker(target)
+        self._scan_worker = FullScanWorker(target, config)
         self._scan_worker.progress.connect(self._on_scan_progress)
         self._scan_worker.host_found.connect(self._on_host_found)
         self._scan_worker.host_updated.connect(self._on_host_updated)
+        self._scan_worker.vuln_found.connect(self._on_vuln_found)
         self._scan_worker.finished.connect(self._on_scan_finished)
         self._scan_worker.error.connect(self._on_scan_error)
         self._scan_worker.start()
@@ -268,10 +311,21 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_scan_finished(self, result) -> None:
+        config = self._build_scan_config()
         self._status_label.setText(tr("Scan complete"))
         self._progress.setVisible(False)
         self._dashboard.set_scan_enabled(True)
-        log.info(f"Scan finished: {len(self._devices)} devices found")
+        log.info(tr("Scan finished: {count} devices found").format(count=len(self._devices)))
+
+        # Update vuln stats
+        critical = sum(1 for v in self._vulns
+                       if v.severity.value in ("critical", "high"))
+        self._dashboard.set_vuln_count(len(self._vulns), critical)
+
+        # Auto-generate report if enabled
+        if config.auto_report and self._devices:
+            log.info("Auto-generating HTML report...")
+            self._generate_html_report()
 
     @Slot(str)
     def _on_scan_error(self, error: str) -> None:
@@ -288,10 +342,12 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, tr("Scan Running"), tr("A vulnerability scan is in progress."))
             return
 
-        log.info(f"Starting vuln scan on {len(devices)} devices")
+        config = self._build_scan_config()
+        log.info(f"Starting vuln scan on {len(devices)} devices "
+                 f"(timeout={config.host_timeout}s)")
         self._progress.setVisible(True)
 
-        self._vuln_worker = VulnScanWorker(devices)
+        self._vuln_worker = VulnScanWorker(devices, config)
         self._vuln_worker.progress.connect(self._on_scan_progress)
         self._vuln_worker.vuln_found.connect(self._on_vuln_found)
         self._vuln_worker.finished.connect(self._on_vuln_scan_finished)
