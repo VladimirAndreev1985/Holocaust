@@ -254,20 +254,18 @@ class UpdateWorker(QThread):
     finished = Signal(dict)  # {component: success}
     error = Signal(str)
 
+    def __init__(self, nvd_api_key: str = "", parent=None):
+        super().__init__(parent)
+        self._nvd_api_key = nvd_api_key
+        self._updater = None
+
     def run(self) -> None:
         try:
             from core.updater import Updater
-            updater = Updater()
+            self._updater = Updater(nvd_api_key=self._nvd_api_key)
+            self._updater.signals.progress.connect(self.progress.emit)
 
-            self.progress.emit("Updating Metasploit...", 10)
-            results = {}
-            results["metasploit"] = updater.update_metasploit()
-
-            self.progress.emit("Updating Nmap scripts...", 50)
-            results["nmap_scripts"] = updater.update_nmap_scripts()
-
-            self.progress.emit("Updating CVE database...", 80)
-            results["cve_database"] = updater.update_cve_database()
+            results = self._updater.update_all()
 
             self.progress.emit("Updates complete", 100)
             self.finished.emit(results)
@@ -275,3 +273,7 @@ class UpdateWorker(QThread):
         except Exception as e:
             log.error(f"Update worker error: {e}")
             self.error.emit(str(e))
+
+    def abort(self) -> None:
+        if self._updater:
+            self._updater.abort()

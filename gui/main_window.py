@@ -55,6 +55,7 @@ class MainWindow(QMainWindow):
         # Workers
         self._scan_worker: FullScanWorker | None = None
         self._vuln_worker: VulnScanWorker | None = None
+        self._update_worker: UpdateWorker | None = None
 
         self._setup_ui()
         self._connect_signals()
@@ -397,14 +398,26 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _update_databases(self) -> None:
-        worker = UpdateWorker()
-        worker.progress.connect(self._on_scan_progress)
-        worker.finished.connect(lambda r: log.info(f"Updates: {r}"))
-        worker.start()
+        api_key = self._settings_tab.get_settings().get("vulners_api_key", "")
+        self._update_worker = UpdateWorker(nvd_api_key=api_key)
+        self._update_worker.progress.connect(self._on_scan_progress)
+        self._update_worker.finished.connect(self._on_update_finished)
+        self._update_worker.error.connect(self._on_scan_error)
+        self._progress.setVisible(True)
+        self._status_label.setText("Updating databases...")
+        self._update_worker.start()
+
+    @Slot(dict)
+    def _on_update_finished(self, results: dict) -> None:
+        self._progress.setVisible(False)
+        successes = sum(1 for v in results.values() if v)
+        total = len(results)
+        self._status_label.setText(f"Updates done: {successes}/{total} successful")
+        log.info(f"Database updates: {results}")
 
     def closeEvent(self, event) -> None:
         # Cleanup workers
-        for worker in [self._scan_worker, self._vuln_worker]:
+        for worker in [self._scan_worker, self._vuln_worker, self._update_worker]:
             if worker and worker.isRunning():
                 worker.abort()
                 worker.wait(3000)
