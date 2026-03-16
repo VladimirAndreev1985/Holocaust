@@ -839,6 +839,18 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "Deep Scan": {
         "ru": "Глубокое сканирование",
     },
+    "Start Quick Scan": {
+        "ru": "Быстрое сканирование",
+    },
+    "Start Standard Scan": {
+        "ru": "Стандартное сканирование",
+    },
+    "Start Deep Scan": {
+        "ru": "Глубокое сканирование",
+    },
+    "Start Scan": {
+        "ru": "Начать сканирование",
+    },
     "Quick — top 100 ports, fast detection\n"
     "Standard — configured port range, OS detection\n"
     "Deep — all 65535 ports, aggressive audit + auto vuln scan": {

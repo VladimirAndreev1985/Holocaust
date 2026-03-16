@@ -102,10 +102,12 @@ class DashboardTab(QWidget):
             "Deep — all 65535 ports, aggressive audit + auto vuln scan"
         ))
 
-        self._scan_btn = QPushButton(tr("Full Network Audit"))
+        self._scan_btn = QPushButton()
         self._scan_btn.setObjectName("primaryButton")
         self._scan_btn.setMinimumWidth(200)
         self._scan_btn.clicked.connect(self._on_scan_clicked)
+        self._depth_combo.currentIndexChanged.connect(self._update_scan_btn_text)
+        self._update_scan_btn_text()
 
         top_bar.addWidget(title)
         top_bar.addStretch()
@@ -200,13 +202,27 @@ class DashboardTab(QWidget):
         self._depth_combo.setEnabled(enabled)
         self._auto_vuln.setEnabled(enabled)
         self._auto_report.setEnabled(enabled)
-        self._scan_btn.setText(tr("Full Network Audit") if enabled else tr("Scanning..."))
+        if enabled:
+            self._update_scan_btn_text()
+        else:
+            self._scan_btn.setText(tr("Scanning..."))
 
     def set_vuln_count(self, total: int, critical: int) -> None:
         self._stat_vulns.set_value(str(total))
         self._stat_critical.set_value(str(critical))
 
     # --- Private ---
+
+    _SCAN_BTN_LABELS = {
+        ScanDepth.QUICK.value: "Start Quick Scan",
+        ScanDepth.STANDARD.value: "Start Standard Scan",
+        ScanDepth.DEEP.value: "Start Deep Scan",
+    }
+
+    def _update_scan_btn_text(self, _index: int = 0) -> None:
+        depth = self._depth_combo.currentData()
+        label = self._SCAN_BTN_LABELS.get(depth, "Start Scan")
+        self._scan_btn.setText(tr(label))
 
     def _update_stats(self) -> None:
         self._stat_hosts.set_value(str(len(self._devices)))
