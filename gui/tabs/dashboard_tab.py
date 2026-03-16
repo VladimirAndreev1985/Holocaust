@@ -95,7 +95,7 @@ class DashboardTab(QWidget):
         self._depth_combo.addItem(tr("Standard Scan"), ScanDepth.STANDARD.value)
         self._depth_combo.addItem(tr("Deep Scan"), ScanDepth.DEEP.value)
         self._depth_combo.setCurrentIndex(1)  # Standard by default
-        self._depth_combo.setMinimumWidth(150)
+        self._depth_combo.setMinimumWidth(220)
         self._depth_combo.setToolTip(tr(
             "Quick — top 100 ports, fast detection\n"
             "Standard — configured port range, OS detection\n"
