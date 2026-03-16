@@ -414,6 +414,8 @@ class MainWindow(QMainWindow):
         total = len(results)
         self._status_label.setText(f"Updates done: {successes}/{total} successful")
         log.info(f"Database updates: {results}")
+        # Auto-refresh DB status panel in Settings
+        self._settings_tab._refresh_db_status()
 
     def closeEvent(self, event) -> None:
         # Cleanup workers
