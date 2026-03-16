@@ -40,7 +40,8 @@ def ensure_python_packages() -> None:
     import subprocess
 
     REQUIRED = [
-        ("PySide6", "PySide6"),
+        ("PySide6.QtCore", "PySide6"),
+        ("PySide6.QtWidgets", "PySide6"),
         ("nmap", "python-nmap"),
         ("scapy", "scapy"),
         ("psutil", "psutil"),
@@ -55,11 +56,14 @@ def ensure_python_packages() -> None:
     ]
 
     missing = []
+    seen_pip = set()
     for import_name, pip_name in REQUIRED:
         try:
             __import__(import_name)
         except ImportError:
-            missing.append(pip_name)
+            if pip_name not in seen_pip:
+                missing.append(pip_name)
+                seen_pip.add(pip_name)
 
     if missing:
         print(f"[*] Installing required packages: {', '.join(missing)}")
