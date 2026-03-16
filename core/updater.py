@@ -104,27 +104,95 @@ class Updater:
             return False
 
     def update_cve_database(self) -> bool:
-        """Update local CVE cache from online sources."""
+        """Update local CVE cache from NVD API and save to SQLite."""
         component = "cve_database"
         self.signals.started.emit(component)
         log.info("Updating CVE database...")
 
         try:
             import requests
+            import sqlite3
+            from database.db_manager import get_cve_cache_db
 
-            # Fetch recent CVEs from NIST NVD (simplified)
-            url = "https://services.nvd.nist.gov/rest/json/cves/2.0?resultsPerPage=100"
-            response = requests.get(url, timeout=30)
+            db_path = get_cve_cache_db()
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
 
-            if response.status_code == 200:
-                self._last_update[component] = datetime.now()
-                log.info("CVE database updated")
-                self.signals.finished.emit(component, True, "Updated from NVD")
-                return True
-            else:
-                log.error(f"CVE update HTTP {response.status_code}")
-                self.signals.finished.emit(component, False, f"HTTP {response.status_code}")
-                return False
+            total_inserted = 0
+            # Fetch multiple pages of recent CVEs
+            for start_index in range(0, 500, 100):
+                url = (
+                    f"https://services.nvd.nist.gov/rest/json/cves/2.0"
+                    f"?resultsPerPage=100&startIndex={start_index}"
+                )
+                response = requests.get(url, timeout=30)
+                if response.status_code != 200:
+                    log.warning(f"NVD API returned HTTP {response.status_code} at index {start_index}")
+                    break
+
+                data = response.json()
+                vulnerabilities = data.get("vulnerabilities", [])
+                if not vulnerabilities:
+                    break
+
+                for item in vulnerabilities:
+                    cve = item.get("cve", {})
+                    cve_id = cve.get("id", "")
+                    if not cve_id:
+                        continue
+
+                    descriptions = cve.get("descriptions", [])
+                    desc = next((d["value"] for d in descriptions if d.get("lang") == "en"), "")
+
+                    # Extract CVSS score
+                    metrics = cve.get("metrics", {})
+                    cvss_score = 0.0
+                    severity = "info"
+                    for version_key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
+                        metric_list = metrics.get(version_key, [])
+                        if metric_list:
+                            cvss_data = metric_list[0].get("cvssData", {})
+                            cvss_score = cvss_data.get("baseScore", 0.0)
+                            severity = cvss_data.get("baseSeverity", "info").lower()
+                            break
+
+                    published = cve.get("published", "")[:10]
+
+                    # Extract affected products from CPE
+                    affected_product = ""
+                    affected_version = ""
+                    configs = cve.get("configurations", [])
+                    for config in configs:
+                        for node in config.get("nodes", []):
+                            for match in node.get("cpeMatch", []):
+                                cpe = match.get("criteria", "")
+                                parts = cpe.split(":")
+                                if len(parts) >= 6:
+                                    affected_product = parts[4]
+                                    affected_version = parts[5] if parts[5] != "*" else ""
+                                    break
+
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO cve_entries
+                        (cve_id, title, description, cvss_score, severity,
+                         published_date, affected_product, affected_version, last_updated)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        cve_id, cve_id, desc[:1000], cvss_score, severity,
+                        published, affected_product, affected_version,
+                        datetime.now().isoformat(),
+                    ))
+                    total_inserted += 1
+
+                conn.commit()
+                log.info(f"CVE batch: {start_index}-{start_index+100}, total so far: {total_inserted}")
+
+            conn.close()
+            self._last_update[component] = datetime.now()
+            msg = f"Saved {total_inserted} CVE entries"
+            log.info(msg)
+            self.signals.finished.emit(component, True, msg)
+            return True
 
         except Exception as e:
             log.error(f"CVE database update failed: {e}")
