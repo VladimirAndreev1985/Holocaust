@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont
 
+from core.i18n import tr
+
 
 class SettingsTab(QWidget):
     """Application settings and configuration."""
@@ -45,16 +47,16 @@ class SettingsTab(QWidget):
         outer.addWidget(scroll)
         scroll.setWidget(content)
 
-        title = QLabel("Settings")
+        title = QLabel(tr("Settings"))
         title.setObjectName("titleLabel")
         layout.addWidget(title)
 
         # === Database Status ===
-        db_group = QGroupBox("Database Status")
+        db_group = QGroupBox(tr("Database Status"))
         db_layout = QGridLayout(db_group)
         db_layout.setSpacing(8)
 
-        headers = ["Component", "Status", "Details", "Last Updated"]
+        headers = [tr("Component"), tr("Status"), tr("Details"), tr("Last Updated")]
         for col, h in enumerate(headers):
             lbl = QLabel(h)
             lbl.setStyleSheet("color: #8ca8c4; font-weight: bold; font-size: 12px;")
@@ -62,11 +64,11 @@ class SettingsTab(QWidget):
 
         self._db_status_labels: dict[str, dict[str, QLabel]] = {}
         components = [
-            ("nmap", "Nmap Scripts"),
-            ("metasploit", "Metasploit DB"),
-            ("cve_cache", "CVE Cache"),
-            ("signatures", "Device Signatures"),
-            ("vulners", "Vulners API"),
+            ("nmap", tr("Nmap Scripts")),
+            ("metasploit", tr("Metasploit DB")),
+            ("cve_cache", tr("CVE Cache")),
+            ("signatures", tr("Device Signatures")),
+            ("vulners", tr("Vulners API")),
         ]
         for row, (key, name) in enumerate(components, start=1):
             name_lbl = QLabel(name)
@@ -86,101 +88,109 @@ class SettingsTab(QWidget):
                 "updated": updated_lbl,
             }
 
-        refresh_btn = QPushButton("Refresh Status")
+        refresh_btn = QPushButton(tr("Refresh Status"))
         refresh_btn.clicked.connect(self._refresh_db_status)
         db_layout.addWidget(refresh_btn, len(components) + 1, 0, 1, 2)
 
         layout.addWidget(db_group)
 
         # === General ===
-        general_group = QGroupBox("General")
+        general_group = QGroupBox(tr("General"))
         general_layout = QFormLayout(general_group)
+
+        self._language = QComboBox()
+        self._language.addItem("English", "en")
+        self._language.addItem("Русский", "ru")
+        general_layout.addRow(tr("Language:"), self._language)
 
         self._log_level = QComboBox()
         self._log_level.addItems(["DEBUG", "INFO", "WARNING", "ERROR"])
-        general_layout.addRow("Log Level:", self._log_level)
+        general_layout.addRow(tr("Log Level:"), self._log_level)
 
-        self._auto_update = QCheckBox("Auto-update databases on startup")
+        self._auto_update = QCheckBox(tr("Auto-update databases on startup"))
         self._auto_update.setChecked(True)
         general_layout.addRow(self._auto_update)
 
-        self._confirm_exploits = QCheckBox("Confirm before running exploits")
+        self._confirm_exploits = QCheckBox(tr("Confirm before running exploits"))
         self._confirm_exploits.setChecked(True)
         general_layout.addRow(self._confirm_exploits)
 
         layout.addWidget(general_group)
 
         # === Scanning ===
-        scan_group = QGroupBox("Scanning")
+        scan_group = QGroupBox(tr("Scanning"))
         scan_layout = QFormLayout(scan_group)
 
         self._scan_timeout = QSpinBox()
         self._scan_timeout.setRange(30, 600)
         self._scan_timeout.setValue(120)
         self._scan_timeout.setSuffix(" sec")
-        scan_layout.addRow("Scan Timeout:", self._scan_timeout)
+        scan_layout.addRow(tr("Scan Timeout:"), self._scan_timeout)
 
         self._port_range = QLineEdit("1-10000")
-        scan_layout.addRow("Port Range:", self._port_range)
+        scan_layout.addRow(tr("Port Range:"), self._port_range)
 
         self._scan_speed = QComboBox()
-        self._scan_speed.addItems(["T1 (Sneaky)", "T2 (Polite)", "T3 (Normal)", "T4 (Aggressive)", "T5 (Insane)"])
+        self._scan_speed.addItems([
+            tr("T1 (Sneaky)"), tr("T2 (Polite)"), tr("T3 (Normal)"),
+            tr("T4 (Aggressive)"), tr("T5 (Insane)"),
+        ])
         self._scan_speed.setCurrentIndex(3)
-        scan_layout.addRow("Scan Speed:", self._scan_speed)
+        scan_layout.addRow(tr("Scan Speed:"), self._scan_speed)
 
         layout.addWidget(scan_group)
 
         # === Metasploit ===
-        msf_group = QGroupBox("Metasploit")
+        msf_group = QGroupBox(tr("Metasploit"))
         msf_layout = QFormLayout(msf_group)
 
         self._msf_host = QLineEdit("127.0.0.1")
-        msf_layout.addRow("RPC Host:", self._msf_host)
+        msf_layout.addRow(tr("RPC Host:"), self._msf_host)
 
         self._msf_port = QSpinBox()
         self._msf_port.setRange(1, 65535)
         self._msf_port.setValue(55553)
-        msf_layout.addRow("RPC Port:", self._msf_port)
+        msf_layout.addRow(tr("RPC Port:"), self._msf_port)
 
         self._msf_pass = QLineEdit("msf")
         self._msf_pass.setEchoMode(QLineEdit.EchoMode.Password)
-        msf_layout.addRow("RPC Password:", self._msf_pass)
+        msf_layout.addRow(tr("RPC Password:"), self._msf_pass)
 
-        self._auto_msf = QCheckBox("Auto-connect to Metasploit on startup")
+        self._auto_msf = QCheckBox(tr("Auto-connect to Metasploit on startup"))
         msf_layout.addRow(self._auto_msf)
 
         layout.addWidget(msf_group)
 
         # === Vulners ===
-        vulners_group = QGroupBox("Vulners API")
+        vulners_group = QGroupBox(tr("Vulners API"))
         vulners_layout = QFormLayout(vulners_group)
 
         self._vulners_key = QLineEdit()
-        self._vulners_key.setPlaceholderText("API key (optional)")
+        self._vulners_key.setPlaceholderText(tr("API key (optional)"))
         self._vulners_key.setEchoMode(QLineEdit.EchoMode.Password)
-        vulners_layout.addRow("API Key:", self._vulners_key)
+        vulners_layout.addRow(tr("API Key:"), self._vulners_key)
 
         layout.addWidget(vulners_group)
 
         # === Paths ===
-        paths_group = QGroupBox("Paths")
+        paths_group = QGroupBox(tr("Paths"))
         paths_layout = QFormLayout(paths_group)
 
         self._log_dir = QLineEdit("logs")
-        paths_layout.addRow("Log Directory:", self._log_dir)
+        paths_layout.addRow(tr("Log Directory:"), self._log_dir)
 
         self._report_dir = QLineEdit("reports_output")
-        paths_layout.addRow("Report Directory:", self._report_dir)
+        paths_layout.addRow(tr("Report Directory:"), self._report_dir)
 
         layout.addWidget(paths_group)
 
         # Buttons
         btn_layout = QHBoxLayout()
-        save_btn = QPushButton("Save Settings")
+        save_btn = QPushButton(tr("Save Settings"))
         save_btn.setObjectName("primaryButton")
         save_btn.clicked.connect(self._save_settings)
 
-        update_btn = QPushButton("Update All Databases")
+        update_btn = QPushButton(tr("Update All Databases"))
         update_btn.setObjectName("successButton")
         update_btn.clicked.connect(self.update_databases.emit)
 
@@ -203,7 +213,7 @@ class SettingsTab(QWidget):
                 import subprocess
                 r = subprocess.run(["nmap", "--version"], capture_output=True, text=True, timeout=5)
                 version = r.stdout.split("\n")[0].strip() if r.stdout else "installed"
-                nmap_labels["status"].setText("Installed")
+                nmap_labels["status"].setText(tr("Installed"))
                 nmap_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
                 nmap_labels["details"].setText(version)
                 # Check script DB modification time
@@ -212,12 +222,12 @@ class SettingsTab(QWidget):
                     mtime = datetime.fromtimestamp(nse_path.stat().st_mtime)
                     nmap_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
                 else:
-                    nmap_labels["updated"].setText("N/A")
+                    nmap_labels["updated"].setText(tr("N/A"))
             except Exception:
-                nmap_labels["status"].setText("Installed")
+                nmap_labels["status"].setText(tr("Installed"))
                 nmap_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
         else:
-            nmap_labels["status"].setText("Not found")
+            nmap_labels["status"].setText(tr("Not found"))
             nmap_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
             nmap_labels["details"].setText("sudo apt install nmap")
 
@@ -225,7 +235,7 @@ class SettingsTab(QWidget):
         msf_labels = self._db_status_labels["metasploit"]
         msf_path = shutil.which("msfconsole")
         if msf_path:
-            msf_labels["status"].setText("Installed")
+            msf_labels["status"].setText(tr("Installed"))
             msf_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
             try:
                 import subprocess
@@ -239,11 +249,11 @@ class SettingsTab(QWidget):
                 mtime = datetime.fromtimestamp(msf_db.stat().st_mtime)
                 msf_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
             elif shutil.which("msfupdate"):
-                msf_labels["updated"].setText("Use 'Update All'")
+                msf_labels["updated"].setText(tr("Use 'Update All'"))
             else:
-                msf_labels["updated"].setText("N/A")
+                msf_labels["updated"].setText(tr("N/A"))
         else:
-            msf_labels["status"].setText("Not found")
+            msf_labels["status"].setText(tr("Not found"))
             msf_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
             msf_labels["details"].setText("sudo apt install metasploit-framework")
 
@@ -258,23 +268,23 @@ class SettingsTab(QWidget):
                 count = cursor.fetchone()[0]
                 conn.close()
                 if count > 0:
-                    cve_labels["status"].setText("Active")
+                    cve_labels["status"].setText(tr("Active"))
                     cve_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
-                    cve_labels["details"].setText(f"{count} CVE entries cached")
+                    cve_labels["details"].setText(tr("{count} CVE entries cached").format(count=count))
                 else:
-                    cve_labels["status"].setText("Empty")
+                    cve_labels["status"].setText(tr("Empty"))
                     cve_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
-                    cve_labels["details"].setText("0 entries — run Update All")
+                    cve_labels["details"].setText(tr("0 entries — run Update All"))
                 mtime = datetime.fromtimestamp(cve_db_path.stat().st_mtime)
                 cve_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
             except Exception as e:
-                cve_labels["status"].setText("Error")
+                cve_labels["status"].setText(tr("Error"))
                 cve_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
                 cve_labels["details"].setText(str(e)[:50])
         else:
-            cve_labels["status"].setText("Not created")
+            cve_labels["status"].setText(tr("Not created"))
             cve_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
-            cve_labels["details"].setText("Will be created on first run")
+            cve_labels["details"].setText(tr("Will be created on first run"))
 
         # --- Device Signatures ---
         sig_labels = self._db_status_labels["signatures"]
@@ -289,7 +299,7 @@ class SettingsTab(QWidget):
                     counts[table] = cursor.fetchone()[0]
                 conn.close()
                 total = sum(counts.values())
-                sig_labels["status"].setText("Active" if total > 0 else "Empty")
+                sig_labels["status"].setText(tr("Active") if total > 0 else tr("Empty"))
                 sig_labels["status"].setStyleSheet(
                     "color: #4a8a5a; font-weight: bold;" if total > 0
                     else "color: #b09040; font-weight: bold;"
@@ -301,25 +311,25 @@ class SettingsTab(QWidget):
                 mtime = datetime.fromtimestamp(sig_db_path.stat().st_mtime)
                 sig_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
             except Exception as e:
-                sig_labels["status"].setText("Error")
+                sig_labels["status"].setText(tr("Error"))
                 sig_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
                 sig_labels["details"].setText(str(e)[:50])
         else:
-            sig_labels["status"].setText("Not created")
+            sig_labels["status"].setText(tr("Not created"))
             sig_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
 
         # --- Vulners API ---
         vuln_labels = self._db_status_labels["vulners"]
         api_key = self._vulners_key.text().strip()
         if api_key:
-            vuln_labels["status"].setText("Configured")
+            vuln_labels["status"].setText(tr("Configured"))
             vuln_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
-            vuln_labels["details"].setText(f"Key: {'*' * 8}...{api_key[-4:]}" if len(api_key) > 4 else "Key set")
+            vuln_labels["details"].setText(f"Key: {'*' * 8}...{api_key[-4:]}" if len(api_key) > 4 else tr("Key set"))
         else:
-            vuln_labels["status"].setText("No API key")
+            vuln_labels["status"].setText(tr("No API key"))
             vuln_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
-            vuln_labels["details"].setText("Optional — works without key (limited)")
-        vuln_labels["updated"].setText("N/A")
+            vuln_labels["details"].setText(tr("Optional — works without key (limited)"))
+        vuln_labels["updated"].setText(tr("N/A"))
 
     def _load_settings(self) -> None:
         if self._config_path.exists():
@@ -330,6 +340,11 @@ class SettingsTab(QWidget):
                 self._log_level.setCurrentText(g.get("log_level", "DEBUG"))
                 self._auto_update.setChecked(g.getboolean("auto_update", True))
                 self._confirm_exploits.setChecked(g.getboolean("confirm_exploits", True))
+                # Language
+                lang = g.get("language", "en")
+                idx = self._language.findData(lang)
+                if idx >= 0:
+                    self._language.setCurrentIndex(idx)
 
             if "scanning" in self._config:
                 s = self._config["scanning"]
@@ -357,6 +372,7 @@ class SettingsTab(QWidget):
             "log_level": self._log_level.currentText(),
             "auto_update": str(self._auto_update.isChecked()),
             "confirm_exploits": str(self._confirm_exploits.isChecked()),
+            "language": self._language.currentData(),
         }
         self._config["scanning"] = {
             "timeout": str(self._scan_timeout.value()),
@@ -382,13 +398,24 @@ class SettingsTab(QWidget):
             self._config.write(f)
 
         self.settings_saved.emit(self.get_settings())
-        QMessageBox.information(self, "Settings", "Settings saved successfully.")
+
+        # Check if language changed — notify restart needed
+        from core.i18n import get_language
+        new_lang = self._language.currentData()
+        if new_lang != get_language():
+            QMessageBox.information(
+                self, tr("Language Changed"),
+                tr("Language changed. Restart the application to apply."),
+            )
+        else:
+            QMessageBox.information(self, tr("Settings"), tr("Settings saved successfully."))
 
     def get_settings(self) -> dict:
         return {
             "log_level": self._log_level.currentText(),
             "auto_update": self._auto_update.isChecked(),
             "confirm_exploits": self._confirm_exploits.isChecked(),
+            "language": self._language.currentData(),
             "scan_timeout": self._scan_timeout.value(),
             "port_range": self._port_range.text(),
             "scan_speed": self._scan_speed.currentIndex(),

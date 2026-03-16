@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
 from models.vulnerability import Vulnerability, VulnSeverity
+from core.i18n import tr
 
 
 class VulnsTab(QWidget):
@@ -29,12 +30,12 @@ class VulnsTab(QWidget):
 
         # Header
         header = QHBoxLayout()
-        title = QLabel("Vulnerabilities & Exploits")
+        title = QLabel(tr("Vulnerabilities & Exploits"))
         title.setObjectName("titleLabel")
         header.addWidget(title)
         header.addStretch()
 
-        self._count_label = QLabel("0 vulnerabilities")
+        self._count_label = QLabel(tr("{count} vulnerabilities").format(count=0))
         self._count_label.setStyleSheet("color: #606070;")
         header.addWidget(self._count_label)
         layout.addLayout(header)
@@ -43,23 +44,23 @@ class VulnsTab(QWidget):
         filter_layout = QHBoxLayout()
 
         self._severity_filter = QComboBox()
-        self._severity_filter.addItem("All Severities", None)
-        self._severity_filter.addItem("Critical", VulnSeverity.CRITICAL)
-        self._severity_filter.addItem("High", VulnSeverity.HIGH)
-        self._severity_filter.addItem("Medium", VulnSeverity.MEDIUM)
-        self._severity_filter.addItem("Low", VulnSeverity.LOW)
-        self._severity_filter.addItem("Info", VulnSeverity.INFO)
+        self._severity_filter.addItem(tr("All Severities"), None)
+        self._severity_filter.addItem(tr("Critical"), VulnSeverity.CRITICAL)
+        self._severity_filter.addItem(tr("High"), VulnSeverity.HIGH)
+        self._severity_filter.addItem(tr("Medium"), VulnSeverity.MEDIUM)
+        self._severity_filter.addItem(tr("Low"), VulnSeverity.LOW)
+        self._severity_filter.addItem(tr("Info"), VulnSeverity.INFO)
         self._severity_filter.currentIndexChanged.connect(self._apply_filters)
-        filter_layout.addWidget(QLabel("Severity:"))
+        filter_layout.addWidget(QLabel(tr("Severity:")))
         filter_layout.addWidget(self._severity_filter)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("Search CVE, title, host...")
+        self._search.setPlaceholderText(tr("Search CVE, title, host..."))
         self._search.setMaximumWidth(300)
         self._search.textChanged.connect(self._apply_filters)
         filter_layout.addWidget(self._search)
 
-        self._exploitable_only = QPushButton("Exploitable Only")
+        self._exploitable_only = QPushButton(tr("Exploitable Only"))
         self._exploitable_only.setCheckable(True)
         self._exploitable_only.toggled.connect(self._apply_filters)
         filter_layout.addWidget(self._exploitable_only)
@@ -74,8 +75,8 @@ class VulnsTab(QWidget):
         self._table = QTableWidget()
         self._table.setColumnCount(8)
         self._table.setHorizontalHeaderLabels([
-            "CVE", "Title", "Host", "Port", "CVSS",
-            "Severity", "Exploitable", "Action"
+            tr("CVE"), tr("Title"), tr("Host"), tr("Port"), tr("CVSS"),
+            tr("Severity"), tr("Exploitable"), tr("Action")
         ])
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._table.setAlternatingRowColors(True)
@@ -85,7 +86,7 @@ class VulnsTab(QWidget):
         splitter.addWidget(self._table)
 
         # Detail panel
-        detail_group = QGroupBox("Vulnerability Details")
+        detail_group = QGroupBox(tr("Vulnerability Details"))
         detail_layout = QVBoxLayout(detail_group)
 
         self._detail_text = QTextEdit()
@@ -94,12 +95,12 @@ class VulnsTab(QWidget):
         detail_layout.addWidget(self._detail_text)
 
         action_layout = QHBoxLayout()
-        self._exploit_btn = QPushButton("Launch Best Exploit")
+        self._exploit_btn = QPushButton(tr("Launch Best Exploit"))
         self._exploit_btn.setObjectName("dangerButton")
         self._exploit_btn.setEnabled(False)
         self._exploit_btn.clicked.connect(self._on_exploit)
 
-        self._copy_btn = QPushButton("Copy CVE")
+        self._copy_btn = QPushButton(tr("Copy CVE"))
         self._copy_btn.clicked.connect(self._on_copy_cve)
 
         action_layout.addWidget(self._exploit_btn)
@@ -137,7 +138,7 @@ class VulnsTab(QWidget):
             filtered.append(v)
 
         self._populate_table(filtered)
-        self._count_label.setText(f"{len(filtered)} vulnerabilities")
+        self._count_label.setText(tr("{count} vulnerabilities").format(count=len(filtered)))
 
     def _populate_table(self, vulns: list[Vulnerability]) -> None:
         self._table.setSortingEnabled(False)
@@ -155,7 +156,7 @@ class VulnsTab(QWidget):
             sev_item.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
             self._table.setItem(row, 5, sev_item)
 
-            exp_item = QTableWidgetItem("YES" if vuln.is_exploitable else "No")
+            exp_item = QTableWidgetItem(tr("YES") if vuln.is_exploitable else tr("No"))
             if vuln.is_exploitable:
                 exp_item.setForeground(QColor("#a05050"))
             self._table.setItem(row, 6, exp_item)
@@ -164,7 +165,7 @@ class VulnsTab(QWidget):
             self._table.item(row, 0).setData(Qt.ItemDataRole.UserRole, vuln)
 
             if vuln.has_exploit:
-                btn = QPushButton("Exploit")
+                btn = QPushButton(tr("Exploit"))
                 btn.setObjectName("dangerButton")
                 btn.setFixedHeight(26)
                 btn.clicked.connect(lambda _, v=vuln: self._launch_exploit(v))
@@ -183,23 +184,23 @@ class VulnsTab(QWidget):
         self._exploit_btn.setEnabled(vuln.has_exploit)
 
         details = (
-            f"<b>{vuln.cve_id or 'N/A'}</b> — {vuln.title}<br><br>"
-            f"<b>Host:</b> {vuln.host_ip}:{vuln.affected_port}<br>"
-            f"<b>CVSS:</b> {vuln.cvss_score} ({vuln.severity.value})<br>"
-            f"<b>Source:</b> {vuln.source.value}<br>"
-            f"<b>Confirmed:</b> {'Yes' if vuln.is_confirmed else 'No'}<br><br>"
-            f"<b>Description:</b><br>{vuln.description}<br><br>"
+            f"<b>{vuln.cve_id or tr('N/A')}</b> — {vuln.title}<br><br>"
+            f"<b>{tr('Host')}:</b> {vuln.host_ip}:{vuln.affected_port}<br>"
+            f"<b>{tr('CVSS')}:</b> {vuln.cvss_score} ({vuln.severity.value})<br>"
+            f"<b>{tr('Source')}:</b> {vuln.source.value}<br>"
+            f"<b>{tr('Confirmed')}:</b> {tr('Yes') if vuln.is_confirmed else tr('No')}<br><br>"
+            f"<b>{tr('Description')}:</b><br>{vuln.description}<br><br>"
         )
 
         if vuln.exploits:
-            details += "<b>Available Exploits:</b><br>"
+            details += f"<b>{tr('Available Exploits')}:</b><br>"
             for exp in vuln.exploits:
                 details += f"  - {exp.name} ({exp.source}) [{exp.reliability}]<br>"
                 if exp.module_path:
-                    details += f"    Module: <code>{exp.module_path}</code><br>"
+                    details += f"    {tr('Module')}: <code>{exp.module_path}</code><br>"
 
         if vuln.references:
-            details += "<br><b>References:</b><br>"
+            details += f"<br><b>{tr('References')}:</b><br>"
             for ref in vuln.references[:5]:
                 details += f"  - {ref}<br>"
 
@@ -207,9 +208,9 @@ class VulnsTab(QWidget):
 
     def _launch_exploit(self, vuln: Vulnerability) -> None:
         reply = QMessageBox.question(
-            self, "Confirm Exploit",
-            f"Launch exploit for {vuln.cve_id or vuln.title} "
-            f"against {vuln.host_ip}?",
+            self, tr("Confirm Exploit"),
+            tr("Launch exploit for {target} against {host}?").format(
+                target=vuln.cve_id or vuln.title, host=vuln.host_ip),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:

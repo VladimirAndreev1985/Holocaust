@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
+from core.i18n import tr
+
 
 class MetasploitTab(QWidget):
     """Metasploit framework integration tab."""
@@ -28,16 +30,16 @@ class MetasploitTab(QWidget):
 
         # Header
         header = QHBoxLayout()
-        title = QLabel("Metasploit Framework")
+        title = QLabel(tr("Metasploit Framework"))
         title.setObjectName("titleLabel")
         header.addWidget(title)
         header.addStretch()
 
-        self._status_label = QLabel("Disconnected")
+        self._status_label = QLabel(tr("Disconnected"))
         self._status_label.setStyleSheet("color: #a05050; font-weight: bold;")
         header.addWidget(self._status_label)
 
-        self._connect_btn = QPushButton("Connect to msfrpcd")
+        self._connect_btn = QPushButton(tr("Connect to msfrpcd"))
         self._connect_btn.setObjectName("primaryButton")
         self._connect_btn.clicked.connect(self._on_connect)
         header.addWidget(self._connect_btn)
@@ -45,17 +47,17 @@ class MetasploitTab(QWidget):
 
         # Connection settings
         conn_layout = QHBoxLayout()
-        conn_layout.addWidget(QLabel("Host:"))
+        conn_layout.addWidget(QLabel(tr("Host:")))
         self._host_input = QLineEdit("127.0.0.1")
         self._host_input.setMaximumWidth(150)
         conn_layout.addWidget(self._host_input)
 
-        conn_layout.addWidget(QLabel("Port:"))
+        conn_layout.addWidget(QLabel(tr("Port:")))
         self._port_input = QLineEdit("55553")
         self._port_input.setMaximumWidth(80)
         conn_layout.addWidget(self._port_input)
 
-        conn_layout.addWidget(QLabel("Password:"))
+        conn_layout.addWidget(QLabel(tr("Password:")))
         self._pass_input = QLineEdit("msf")
         self._pass_input.setEchoMode(QLineEdit.EchoMode.Password)
         self._pass_input.setMaximumWidth(150)
@@ -67,16 +69,16 @@ class MetasploitTab(QWidget):
         splitter = QSplitter(Qt.Orientation.Vertical)
 
         # === Module Search ===
-        search_group = QGroupBox("Module Search")
+        search_group = QGroupBox(tr("Module Search"))
         search_layout = QVBoxLayout(search_group)
 
         search_bar = QHBoxLayout()
         self._search_input = QLineEdit()
-        self._search_input.setPlaceholderText("Search modules (e.g. 'eternalblue', 'CVE-2021-36260')...")
+        self._search_input.setPlaceholderText(tr("Search modules (e.g. 'eternalblue', 'CVE-2021-36260')..."))
         self._search_input.returnPressed.connect(self._on_search)
         search_bar.addWidget(self._search_input)
 
-        self._search_btn = QPushButton("Search")
+        self._search_btn = QPushButton(tr("Search"))
         self._search_btn.clicked.connect(self._on_search)
         search_bar.addWidget(self._search_btn)
         search_layout.addLayout(search_bar)
@@ -84,7 +86,7 @@ class MetasploitTab(QWidget):
         self._modules_table = QTableWidget()
         self._modules_table.setColumnCount(5)
         self._modules_table.setHorizontalHeaderLabels([
-            "Type", "Module", "Rank", "Description", "Action"
+            tr("Type"), tr("Module"), tr("Rank"), tr("Description"), tr("Action")
         ])
         self._modules_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._modules_table.setAlternatingRowColors(True)
@@ -93,29 +95,29 @@ class MetasploitTab(QWidget):
         splitter.addWidget(search_group)
 
         # === Exploit Config ===
-        exploit_group = QGroupBox("Exploit Configuration")
+        exploit_group = QGroupBox(tr("Exploit Configuration"))
         exploit_layout = QVBoxLayout(exploit_group)
 
         config_layout = QHBoxLayout()
-        config_layout.addWidget(QLabel("Module:"))
+        config_layout.addWidget(QLabel(tr("Module:")))
         self._module_input = QLineEdit()
         self._module_input.setPlaceholderText("exploit/windows/smb/ms17_010_eternalblue")
         config_layout.addWidget(self._module_input)
         exploit_layout.addLayout(config_layout)
 
         target_layout = QHBoxLayout()
-        target_layout.addWidget(QLabel("RHOSTS:"))
+        target_layout.addWidget(QLabel(tr("RHOSTS:")))
         self._target_input = QLineEdit()
-        self._target_input.setPlaceholderText("Target IP")
+        self._target_input.setPlaceholderText(tr("Target IP"))
         self._target_input.setMaximumWidth(200)
         target_layout.addWidget(self._target_input)
 
-        target_layout.addWidget(QLabel("RPORT:"))
+        target_layout.addWidget(QLabel(tr("RPORT:")))
         self._rport_input = QLineEdit()
         self._rport_input.setMaximumWidth(80)
         target_layout.addWidget(self._rport_input)
 
-        target_layout.addWidget(QLabel("Payload:"))
+        target_layout.addWidget(QLabel(tr("Payload:")))
         self._payload_combo = QComboBox()
         self._payload_combo.setEditable(True)
         self._payload_combo.addItems([
@@ -130,7 +132,7 @@ class MetasploitTab(QWidget):
         exploit_layout.addLayout(target_layout)
 
         run_layout = QHBoxLayout()
-        self._run_btn = QPushButton("Run Exploit")
+        self._run_btn = QPushButton(tr("Run Exploit"))
         self._run_btn.setObjectName("dangerButton")
         self._run_btn.clicked.connect(self._on_run_exploit)
         run_layout.addWidget(self._run_btn)
@@ -140,11 +142,11 @@ class MetasploitTab(QWidget):
         splitter.addWidget(exploit_group)
 
         # === Sessions ===
-        sessions_group = QGroupBox("Active Sessions")
+        sessions_group = QGroupBox(tr("Active Sessions"))
         sessions_layout = QVBoxLayout(sessions_group)
 
         session_btn_layout = QHBoxLayout()
-        self._refresh_sessions_btn = QPushButton("Refresh Sessions")
+        self._refresh_sessions_btn = QPushButton(tr("Refresh Sessions"))
         self._refresh_sessions_btn.clicked.connect(self._on_refresh_sessions)
         session_btn_layout.addWidget(self._refresh_sessions_btn)
         session_btn_layout.addStretch()
@@ -153,7 +155,7 @@ class MetasploitTab(QWidget):
         self._sessions_table = QTableWidget()
         self._sessions_table.setColumnCount(5)
         self._sessions_table.setHorizontalHeaderLabels([
-            "ID", "Type", "Target", "Platform", "Info"
+            tr("ID"), tr("Type"), tr("Target"), tr("Platform"), tr("Info")
         ])
         self._sessions_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._sessions_table.setAlternatingRowColors(True)
@@ -166,13 +168,13 @@ class MetasploitTab(QWidget):
     def set_connected(self, connected: bool) -> None:
         self._connected = connected
         if connected:
-            self._status_label.setText("Connected")
+            self._status_label.setText(tr("Connected"))
             self._status_label.setStyleSheet("color: #4a8a5a; font-weight: bold;")
-            self._connect_btn.setText("Disconnect")
+            self._connect_btn.setText(tr("Disconnect"))
         else:
-            self._status_label.setText("Disconnected")
+            self._status_label.setText(tr("Disconnected"))
             self._status_label.setStyleSheet("color: #a05050; font-weight: bold;")
-            self._connect_btn.setText("Connect to msfrpcd")
+            self._connect_btn.setText(tr("Connect to msfrpcd"))
 
     def set_search_results(self, results: list[dict]) -> None:
         self._modules_table.setRowCount(len(results))
@@ -190,7 +192,7 @@ class MetasploitTab(QWidget):
 
             self._modules_table.setItem(row, 3, QTableWidgetItem(mod.get("description", "")))
 
-            use_btn = QPushButton("Use")
+            use_btn = QPushButton(tr("Use"))
             use_btn.clicked.connect(lambda _, m=mod: self._use_module(m))
             self._modules_table.setCellWidget(row, 4, use_btn)
 
@@ -228,12 +230,12 @@ class MetasploitTab(QWidget):
         module = self._module_input.text()
         target = self._target_input.text()
         if not module or not target:
-            QMessageBox.warning(self, "Missing Fields", "Module and target IP are required.")
+            QMessageBox.warning(self, tr("Missing Fields"), tr("Module and target IP are required."))
             return
 
         reply = QMessageBox.question(
-            self, "Confirm Exploit Execution",
-            f"Run {module} against {target}?",
+            self, tr("Confirm Exploit Execution"),
+            tr("Run {module} against {target}?").format(module=module, target=target),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:

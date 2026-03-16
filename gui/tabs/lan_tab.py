@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
 from models.device import Device, DeviceType, RiskLevel
+from core.i18n import tr
 
 
 class LanTab(QWidget):
@@ -32,22 +33,22 @@ class LanTab(QWidget):
 
         # Header
         header = QHBoxLayout()
-        title = QLabel("LAN Scanner")
+        title = QLabel(tr("LAN Scanner"))
         title.setObjectName("titleLabel")
         header.addWidget(title)
         header.addStretch()
 
         self._target_input = QLineEdit()
-        self._target_input.setPlaceholderText("Target: 192.168.1.0/24")
+        self._target_input.setPlaceholderText(tr("Target: 192.168.1.0/24"))
         self._target_input.setMinimumWidth(200)
         self._target_input.setMaximumWidth(250)
         self._target_input.returnPressed.connect(self._on_scan)
 
-        self._scan_btn = QPushButton("Scan Network")
+        self._scan_btn = QPushButton(tr("Scan Network"))
         self._scan_btn.setObjectName("primaryButton")
         self._scan_btn.clicked.connect(self._on_scan)
 
-        self._vuln_btn = QPushButton("Vuln Scan Selected")
+        self._vuln_btn = QPushButton(tr("Vuln Scan Selected"))
         self._vuln_btn.setObjectName("dangerButton")
         self._vuln_btn.clicked.connect(self._on_vuln_scan)
 
@@ -59,36 +60,36 @@ class LanTab(QWidget):
         # Filters
         filter_layout = QHBoxLayout()
 
-        filter_layout.addWidget(QLabel("Filter:"))
+        filter_layout.addWidget(QLabel(tr("Filter:")))
 
         self._filter_combo = QComboBox()
-        self._filter_combo.addItem("All Devices", None)
-        self._filter_combo.addItem("Cameras", DeviceType.IP_CAMERA)
-        self._filter_combo.addItem("PCs (Windows)", DeviceType.PC_WINDOWS)
-        self._filter_combo.addItem("PCs (Linux)", DeviceType.PC_LINUX)
-        self._filter_combo.addItem("PCs (Mac)", DeviceType.PC_MAC)
-        self._filter_combo.addItem("Servers", DeviceType.SERVER)
-        self._filter_combo.addItem("Phones", "phones")
-        self._filter_combo.addItem("Routers", DeviceType.ROUTER)
-        self._filter_combo.addItem("IoT", DeviceType.IOT)
-        self._filter_combo.addItem("Printers", DeviceType.PRINTER)
-        self._filter_combo.addItem("Unknown", DeviceType.UNKNOWN)
+        self._filter_combo.addItem(tr("All Devices"), None)
+        self._filter_combo.addItem(tr("Cameras"), DeviceType.IP_CAMERA)
+        self._filter_combo.addItem(tr("PCs (Windows)"), DeviceType.PC_WINDOWS)
+        self._filter_combo.addItem(tr("PCs (Linux)"), DeviceType.PC_LINUX)
+        self._filter_combo.addItem(tr("PCs (Mac)"), DeviceType.PC_MAC)
+        self._filter_combo.addItem(tr("Servers"), DeviceType.SERVER)
+        self._filter_combo.addItem(tr("Phones"), "phones")
+        self._filter_combo.addItem(tr("Routers"), DeviceType.ROUTER)
+        self._filter_combo.addItem(tr("IoT"), DeviceType.IOT)
+        self._filter_combo.addItem(tr("Printers"), DeviceType.PRINTER)
+        self._filter_combo.addItem(tr("Unknown"), DeviceType.UNKNOWN)
         self._filter_combo.currentIndexChanged.connect(self._apply_filters)
         filter_layout.addWidget(self._filter_combo)
 
         self._search = QLineEdit()
-        self._search.setPlaceholderText("Search by IP, hostname, vendor...")
+        self._search.setPlaceholderText(tr("Search by IP, hostname, vendor..."))
         self._search.setMaximumWidth(300)
         self._search.textChanged.connect(self._apply_filters)
         filter_layout.addWidget(self._search)
 
-        self._risk_only = QCheckBox("High Risk Only")
+        self._risk_only = QCheckBox(tr("High Risk Only"))
         self._risk_only.stateChanged.connect(self._apply_filters)
         filter_layout.addWidget(self._risk_only)
 
         filter_layout.addStretch()
 
-        self._count_label = QLabel("0 devices")
+        self._count_label = QLabel(tr("{count} devices").format(count=0))
         self._count_label.setStyleSheet("color: #606070;")
         filter_layout.addWidget(self._count_label)
 
@@ -98,8 +99,8 @@ class LanTab(QWidget):
         self._table = QTableWidget()
         self._table.setColumnCount(9)
         self._table.setHorizontalHeaderLabels([
-            "IP Address", "Hostname", "MAC", "Vendor", "Type",
-            "OS", "Ports", "Vulns", "Risk"
+            tr("IP Address"), tr("Hostname"), tr("MAC"), tr("Vendor"), tr("Type"),
+            tr("OS"), tr("Ports"), tr("Vulns"), tr("Risk")
         ])
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._table.setAlternatingRowColors(True)
@@ -153,7 +154,7 @@ class LanTab(QWidget):
             filtered.append(d)
 
         self._populate_table(filtered)
-        self._count_label.setText(f"{len(filtered)} devices")
+        self._count_label.setText(tr("{count} devices").format(count=len(filtered)))
 
     def _populate_table(self, devices: list[Device]) -> None:
         self._table.setSortingEnabled(False)

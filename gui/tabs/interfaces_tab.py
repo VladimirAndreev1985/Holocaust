@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QColor
 
 from models.network_interface import NetworkInterface, WiFiNetwork
+from core.i18n import tr
 
 
 class InterfacesTab(QWidget):
@@ -32,26 +33,26 @@ class InterfacesTab(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(10)
 
-        title = QLabel("Network Interfaces & Wi-Fi")
+        title = QLabel(tr("Network Interfaces & Wi-Fi"))
         title.setObjectName("titleLabel")
         layout.addWidget(title)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
 
         # === Interfaces section ===
-        iface_group = QGroupBox("Network Adapters")
+        iface_group = QGroupBox(tr("Network Adapters"))
         iface_layout = QVBoxLayout(iface_group)
 
         # Buttons
         btn_layout = QHBoxLayout()
-        self._refresh_btn = QPushButton("Refresh")
-        self._up_btn = QPushButton("Up")
+        self._refresh_btn = QPushButton(tr("Refresh"))
+        self._up_btn = QPushButton(tr("Up"))
         self._up_btn.setObjectName("successButton")
-        self._down_btn = QPushButton("Down")
+        self._down_btn = QPushButton(tr("Down"))
         self._down_btn.setObjectName("dangerButton")
-        self._monitor_btn = QPushButton("Monitor Mode")
-        self._managed_btn = QPushButton("Managed Mode")
-        self._kill_btn = QPushButton("Check Kill")
+        self._monitor_btn = QPushButton(tr("Monitor Mode"))
+        self._managed_btn = QPushButton(tr("Managed Mode"))
+        self._kill_btn = QPushButton(tr("Check Kill"))
 
         for btn in [self._refresh_btn, self._up_btn, self._down_btn,
                      self._monitor_btn, self._managed_btn, self._kill_btn]:
@@ -63,7 +64,7 @@ class InterfacesTab(QWidget):
         self._iface_table = QTableWidget()
         self._iface_table.setColumnCount(8)
         self._iface_table.setHorizontalHeaderLabels([
-            "Name", "Type", "Status", "Mode", "IP Address", "MAC", "SSID", "Gateway"
+            tr("Name"), tr("Type"), tr("Status"), tr("Mode"), tr("IP Address"), tr("MAC"), tr("SSID"), tr("Gateway")
         ])
         self._iface_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._iface_table.setAlternatingRowColors(True)
@@ -73,17 +74,17 @@ class InterfacesTab(QWidget):
         splitter.addWidget(iface_group)
 
         # === Wi-Fi section ===
-        wifi_group = QGroupBox("Wi-Fi Networks")
+        wifi_group = QGroupBox(tr("Wi-Fi Networks"))
         wifi_layout = QVBoxLayout(wifi_group)
 
         wifi_btn_layout = QHBoxLayout()
-        self._wifi_scan_btn = QPushButton("Scan Wi-Fi")
+        self._wifi_scan_btn = QPushButton(tr("Scan Wi-Fi"))
         self._wifi_scan_btn.setObjectName("primaryButton")
-        self._wifi_connect_btn = QPushButton("Connect")
+        self._wifi_connect_btn = QPushButton(tr("Connect"))
         self._wifi_connect_btn.setObjectName("successButton")
 
         self._wifi_password = QLineEdit()
-        self._wifi_password.setPlaceholderText("Password (leave empty for open)")
+        self._wifi_password.setPlaceholderText(tr("Password (leave empty for open)"))
         self._wifi_password.setEchoMode(QLineEdit.EchoMode.Password)
         self._wifi_password.setMaximumWidth(250)
 
@@ -97,7 +98,7 @@ class InterfacesTab(QWidget):
         self._wifi_table = QTableWidget()
         self._wifi_table.setColumnCount(7)
         self._wifi_table.setHorizontalHeaderLabels([
-            "SSID", "BSSID", "Channel", "Signal", "Encryption", "Cipher", "Clients"
+            tr("SSID"), tr("BSSID"), tr("Channel"), tr("Signal"), tr("Encryption"), tr("Cipher"), tr("Clients")
         ])
         self._wifi_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._wifi_table.setAlternatingRowColors(True)
@@ -138,7 +139,7 @@ class InterfacesTab(QWidget):
     def set_wifi_networks(self, networks: list[WiFiNetwork]) -> None:
         self._wifi_table.setRowCount(len(networks))
         for row, net in enumerate(networks):
-            self._wifi_table.setItem(row, 0, QTableWidgetItem(net.ssid or "<hidden>"))
+            self._wifi_table.setItem(row, 0, QTableWidgetItem(net.ssid or tr("<hidden>")))
             self._wifi_table.setItem(row, 1, QTableWidgetItem(net.bssid))
             self._wifi_table.setItem(row, 2, QTableWidgetItem(str(net.channel)))
 
@@ -154,7 +155,7 @@ class InterfacesTab(QWidget):
             enc_item = QTableWidgetItem(net.encryption)
             if net.is_open:
                 enc_item.setForeground(QColor("#a05050"))
-                enc_item.setText("OPEN")
+                enc_item.setText(tr("OPEN"))
             self._wifi_table.setItem(row, 4, enc_item)
 
             self._wifi_table.setItem(row, 5, QTableWidgetItem(net.cipher))

@@ -8,6 +8,7 @@ from typing import Optional
 
 from jinja2 import Template
 
+from core.i18n import tr, get_language
 from core.logger import get_logger
 from models.device import Device
 from models.vulnerability import Vulnerability
@@ -15,10 +16,10 @@ from models.vulnerability import Vulnerability
 log = get_logger("reports")
 
 HTML_TEMPLATE = """<!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
 <head>
     <meta charset="UTF-8">
-    <title>Holocaust — Network Audit Report</title>
+    <title>{{ lbl_title }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -96,44 +97,44 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
     <div class="header">
-        <h1>Holocaust — Network Audit Report</h1>
+        <h1>{{ lbl_title }}</h1>
         <div class="meta">
-            Generated: {{ timestamp }}<br>
-            Target: {{ target }}<br>
-            Scan duration: {{ duration }}
+            {{ lbl_generated }} {{ timestamp }}<br>
+            {{ lbl_target }} {{ target }}<br>
+            {{ lbl_duration }} {{ duration }}
         </div>
     </div>
 
     <div class="stats">
         <div class="stat-card">
             <div class="number">{{ devices | length }}</div>
-            <div class="label">Devices Found</div>
+            <div class="label">{{ lbl_devices_found }}</div>
         </div>
         <div class="stat-card">
             <div class="number">{{ vulns | length }}</div>
-            <div class="label">Vulnerabilities</div>
+            <div class="label">{{ lbl_vulnerabilities }}</div>
         </div>
         <div class="stat-card">
             <div class="number">{{ critical_count }}</div>
-            <div class="label">Critical Vulns</div>
+            <div class="label">{{ lbl_critical_vulns }}</div>
         </div>
         <div class="stat-card">
             <div class="number">{{ cameras_count }}</div>
-            <div class="label">IP Cameras</div>
+            <div class="label">{{ lbl_ip_cameras }}</div>
         </div>
     </div>
 
     <div class="section">
-        <h2>Discovered Devices</h2>
+        <h2>{{ lbl_discovered_devices }}</h2>
         <table>
             <thead>
                 <tr>
-                    <th>IP Address</th>
-                    <th>Hostname</th>
-                    <th>Type</th>
-                    <th>OS</th>
-                    <th>Open Ports</th>
-                    <th>Risk</th>
+                    <th>{{ lbl_ip_address }}</th>
+                    <th>{{ lbl_hostname }}</th>
+                    <th>{{ lbl_type }}</th>
+                    <th>{{ lbl_os }}</th>
+                    <th>{{ lbl_open_ports }}</th>
+                    <th>{{ lbl_risk }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -152,17 +153,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
 
     <div class="section">
-        <h2>Vulnerabilities</h2>
+        <h2>{{ lbl_vulnerabilities }}</h2>
         <table>
             <thead>
                 <tr>
-                    <th>CVE</th>
-                    <th>Title</th>
-                    <th>Host</th>
-                    <th>Port</th>
-                    <th>CVSS</th>
-                    <th>Severity</th>
-                    <th>Exploitable</th>
+                    <th>{{ lbl_cve }}</th>
+                    <th>{{ lbl_vtitle }}</th>
+                    <th>{{ lbl_host }}</th>
+                    <th>{{ lbl_port }}</th>
+                    <th>{{ lbl_cvss }}</th>
+                    <th>{{ lbl_severity }}</th>
+                    <th>{{ lbl_exploitable }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -174,7 +175,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     <td>{{ v.affected_port or '—' }}</td>
                     <td>{{ v.cvss_score }}</td>
                     <td><span class="severity {{ v.severity.value }}">{{ v.severity.value | upper }}</span></td>
-                    <td>{{ 'Yes' if v.is_exploitable else 'No' }}</td>
+                    <td>{{ lbl_yes if v.is_exploitable else lbl_no }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -182,7 +183,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     </div>
 
     <div class="footer">
-        Holocaust Network Auditor — Report generated automatically
+        {{ lbl_footer }}
     </div>
 </body>
 </html>"""
@@ -210,6 +211,7 @@ class ReportGenerator:
 
         template = Template(HTML_TEMPLATE)
         html = template.render(
+            lang=get_language(),
             timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             target=target or "Local Network",
             duration=duration or "N/A",
@@ -222,6 +224,32 @@ class ReportGenerator:
             cameras_count=sum(
                 1 for d in devices if d.device_type == DeviceType.IP_CAMERA
             ),
+            # Translated labels
+            lbl_title=tr("Holocaust — Network Audit Report"),
+            lbl_generated=tr("Generated:"),
+            lbl_target=tr("Target:"),
+            lbl_duration=tr("Scan duration:"),
+            lbl_devices_found=tr("Devices Found"),
+            lbl_vulnerabilities=tr("Vulnerabilities"),
+            lbl_critical_vulns=tr("Critical Vulns"),
+            lbl_ip_cameras=tr("IP Cameras"),
+            lbl_discovered_devices=tr("Discovered Devices"),
+            lbl_ip_address=tr("IP Address"),
+            lbl_hostname=tr("Hostname"),
+            lbl_type=tr("Type"),
+            lbl_os=tr("OS"),
+            lbl_open_ports=tr("Open Ports"),
+            lbl_risk=tr("Risk"),
+            lbl_cve=tr("CVE"),
+            lbl_vtitle=tr("Title"),
+            lbl_host=tr("Host"),
+            lbl_port=tr("Port"),
+            lbl_cvss=tr("CVSS"),
+            lbl_severity=tr("Severity"),
+            lbl_exploitable=tr("Exploitable"),
+            lbl_yes=tr("Yes"),
+            lbl_no=tr("No"),
+            lbl_footer=tr("Holocaust Network Auditor — Report generated automatically"),
         )
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

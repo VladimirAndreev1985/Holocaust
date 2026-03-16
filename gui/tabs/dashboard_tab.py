@@ -11,6 +11,7 @@ from PySide6.QtGui import QFont
 
 from gui.widgets.network_graph import NetworkGraph
 from models.device import Device, DeviceType
+from core.i18n import tr
 
 
 class StatCard(QFrame):
@@ -67,26 +68,26 @@ class DashboardTab(QWidget):
         # Top bar: title + scan controls
         top_bar = QHBoxLayout()
 
-        title = QLabel("Network Dashboard")
+        title = QLabel(tr("Network Dashboard"))
         title.setObjectName("titleLabel")
         title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
 
         self._interface_combo = QComboBox()
         self._interface_combo.setMinimumWidth(200)
-        self._interface_combo.setPlaceholderText("Select network interface...")
+        self._interface_combo.setPlaceholderText(tr("Select network interface..."))
         self._interface_combo.currentIndexChanged.connect(self._on_interface_changed)
 
         self._target_input = QLineEdit()
-        self._target_input.setPlaceholderText("Target: 192.168.1.0/24")
+        self._target_input.setPlaceholderText(tr("Target: 192.168.1.0/24"))
         self._target_input.setMinimumWidth(200)
         self._target_input.setMaximumWidth(250)
-        self._target_input.setToolTip(
+        self._target_input.setToolTip(tr(
             "Scan target — auto-detected from interface.\n"
             "Edit manually to scan custom range.\n"
             "Examples: 192.168.1.0/24, 10.0.0.1-50, 172.16.0.0/16"
-        )
+        ))
 
-        self._scan_btn = QPushButton("Full Network Audit")
+        self._scan_btn = QPushButton(tr("Full Network Audit"))
         self._scan_btn.setObjectName("primaryButton")
         self._scan_btn.setMinimumWidth(200)
         self._scan_btn.clicked.connect(self._on_scan_clicked)
@@ -100,11 +101,11 @@ class DashboardTab(QWidget):
 
         # Stats row
         stats_layout = QHBoxLayout()
-        self._stat_hosts = StatCard("Hosts Found", "0", "#5a7ea0")
-        self._stat_cameras = StatCard("IP Cameras", "0", "#a05050")
-        self._stat_pcs = StatCard("PCs / Servers", "0", "#4a8a5a")
-        self._stat_vulns = StatCard("Vulnerabilities", "0", "#b09040")
-        self._stat_critical = StatCard("Critical", "0", "#c04848")
+        self._stat_hosts = StatCard(tr("Hosts Found"), "0", "#5a7ea0")
+        self._stat_cameras = StatCard(tr("IP Cameras"), "0", "#a05050")
+        self._stat_pcs = StatCard(tr("PCs / Servers"), "0", "#4a8a5a")
+        self._stat_vulns = StatCard(tr("Vulnerabilities"), "0", "#b09040")
+        self._stat_critical = StatCard(tr("Critical"), "0", "#c04848")
 
         for card in [self._stat_hosts, self._stat_cameras, self._stat_pcs,
                      self._stat_vulns, self._stat_critical]:
@@ -144,7 +145,7 @@ class DashboardTab(QWidget):
 
     def set_scan_enabled(self, enabled: bool) -> None:
         self._scan_btn.setEnabled(enabled)
-        self._scan_btn.setText("Full Network Audit" if enabled else "Scanning...")
+        self._scan_btn.setText(tr("Full Network Audit") if enabled else tr("Scanning..."))
 
     def set_vuln_count(self, total: int, critical: int) -> None:
         self._stat_vulns.set_value(str(total))

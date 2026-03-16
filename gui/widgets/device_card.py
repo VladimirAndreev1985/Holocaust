@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
+from core.i18n import tr
 from models.device import Device, DeviceType
 
 
@@ -84,13 +85,13 @@ class DeviceCard(QFrame):
         details = QLabel(
             f"{self.device.ip}  |  "
             f"{self.device.device_type.value}  |  "
-            f"{len(self.device.open_ports)} ports"
+            f"{tr('{ports} ports').format(ports=len(self.device.open_ports))}"
         )
         details.setStyleSheet("color: #606070; font-size: 11px; border: none; background: transparent;")
 
-        risk_text = f"Risk: {self.device.risk_level.value.upper()}"
+        risk_text = tr("Risk: {level}").format(level=self.device.risk_level.value.upper())
         if self.device.vulnerabilities:
-            risk_text += f" ({len(self.device.vulnerabilities)} vulns)"
+            risk_text += " " + tr("({count} vulns)").format(count=len(self.device.vulnerabilities))
         risk_label = QLabel(risk_text)
         risk_label.setStyleSheet(f"color: {self.device.risk_level.color}; font-size: 11px; border: none; background: transparent;")
 

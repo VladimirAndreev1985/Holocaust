@@ -12,6 +12,7 @@ from PySide6.QtGui import QFont, QColor
 
 from models.device import Device, DeviceType
 from models.vulnerability import Vulnerability
+from core.i18n import tr
 
 
 class DetailPanel(QWidget):
@@ -37,7 +38,7 @@ class DetailPanel(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(10, 0, 10, 0)
 
-        self._title = QLabel("Device Details")
+        self._title = QLabel(tr("Device Details"))
         self._title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         self._title.setStyleSheet("color: #8ca8c4; border: none;")
 
@@ -61,43 +62,43 @@ class DetailPanel(QWidget):
         # Overview tab
         self._overview = QWidget()
         self._setup_overview_tab()
-        self._tabs.addTab(self._overview, "Overview")
+        self._tabs.addTab(self._overview, tr("Overview"))
 
         # Services tab
         self._services_table = QTableWidget()
         self._services_table.setColumnCount(6)
         self._services_table.setHorizontalHeaderLabels(
-            ["Port", "Protocol", "Service", "Product", "Version", "Info"]
+            [tr("Port"), tr("Protocol"), tr("Service"), tr("Product"), tr("Version"), tr("Info")]
         )
         self._services_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._services_table.setAlternatingRowColors(True)
-        self._tabs.addTab(self._services_table, "Services")
+        self._tabs.addTab(self._services_table, tr("Services"))
 
         # Vulnerabilities tab
         self._vulns_table = QTableWidget()
         self._vulns_table.setColumnCount(6)
         self._vulns_table.setHorizontalHeaderLabels(
-            ["CVE", "Title", "CVSS", "Severity", "Exploitable", "Action"]
+            [tr("CVE"), tr("Title"), tr("CVSS"), tr("Severity"), tr("Exploitable"), tr("Action")]
         )
         self._vulns_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._vulns_table.setAlternatingRowColors(True)
-        self._tabs.addTab(self._vulns_table, "Vulnerabilities")
+        self._tabs.addTab(self._vulns_table, tr("Vulnerabilities"))
 
         # Raw/Notes tab
         self._notes = QTextEdit()
-        self._notes.setPlaceholderText("Notes about this device...")
-        self._tabs.addTab(self._notes, "Notes")
+        self._notes.setPlaceholderText(tr("Notes about this device..."))
+        self._tabs.addTab(self._notes, tr("Notes"))
 
     def _setup_overview_tab(self) -> None:
         layout = QGridLayout(self._overview)
         layout.setSpacing(10)
 
         fields = [
-            ("IP Address:", "ip"), ("MAC Address:", "mac"),
-            ("Hostname:", "hostname"), ("Vendor:", "vendor"),
-            ("Device Type:", "type"), ("OS:", "os"),
-            ("Open Ports:", "ports"), ("Risk Level:", "risk"),
-            ("Vulnerabilities:", "vuln_count"), ("Camera Model:", "camera"),
+            (tr("IP Address:"), "ip"), (tr("MAC Address:"), "mac"),
+            (tr("Hostname:"), "hostname"), (tr("Vendor:"), "vendor"),
+            (tr("Device Type:"), "type"), (tr("OS:"), "os"),
+            (tr("Open Ports:"), "ports"), (tr("Risk Level:"), "risk"),
+            (tr("Vulnerabilities:"), "vuln_count"), (tr("Camera Model:"), "camera"),
         ]
 
         self._overview_labels: dict[str, QLabel] = {}
@@ -118,7 +119,7 @@ class DetailPanel(QWidget):
         """Display device information."""
         self._device = device
         self._vulns = vulns or []
-        self._title.setText(f"Device: {device.display_name}")
+        self._title.setText(tr("Device: {name}").format(name=device.display_name))
 
         # Overview
         self._overview_labels["ip"].setText(device.ip)
@@ -162,10 +163,10 @@ class DetailPanel(QWidget):
             self._vulns_table.setItem(row, 3, sev_item)
 
             self._vulns_table.setItem(row, 4,
-                QTableWidgetItem("Yes" if vuln.is_exploitable else "No"))
+                QTableWidgetItem(tr("Yes") if vuln.is_exploitable else tr("No")))
 
             if vuln.has_exploit:
-                btn = QPushButton("Exploit")
+                btn = QPushButton(tr("Exploit"))
                 btn.setObjectName("dangerButton")
                 btn.setFixedHeight(26)
                 btn.clicked.connect(lambda _, v=vuln: self._on_exploit(v))

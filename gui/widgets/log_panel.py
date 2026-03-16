@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QTextCharFormat, QColor, QFont
 
+from core.i18n import tr
+
 
 LEVEL_COLORS = {
     "DEBUG": "#606070",
@@ -41,20 +43,20 @@ class LogPanel(QWidget):
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(10, 0, 10, 0)
 
-        self._toggle_btn = QPushButton("Logs")
+        self._toggle_btn = QPushButton(tr("Logs"))
         self._toggle_btn.setFlat(True)
         self._toggle_btn.setStyleSheet("color: #8ca8c4; font-weight: bold; border: none;")
         self._toggle_btn.clicked.connect(self._toggle_collapse)
 
         self._filter_combo = QComboBox()
-        self._filter_combo.addItems(["ALL", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
+        self._filter_combo.addItems([tr("ALL"), tr("DEBUG"), tr("INFO"), tr("WARNING"), tr("ERROR"), tr("CRITICAL")])
         self._filter_combo.setFixedWidth(100)
         self._filter_combo.currentTextChanged.connect(self._set_filter)
 
-        self._line_count = QLabel("0 lines")
+        self._line_count = QLabel(tr("0 lines"))
         self._line_count.setStyleSheet("color: #6c7a89;")
 
-        self._clear_btn = QPushButton("Clear")
+        self._clear_btn = QPushButton(tr("Clear"))
         self._clear_btn.setFixedWidth(60)
         self._clear_btn.clicked.connect(self._clear_logs)
 
@@ -118,7 +120,7 @@ class LogPanel(QWidget):
 
         # Update line count
         lines = self._text.document().blockCount()
-        self._line_count.setText(f"{lines} lines")
+        self._line_count.setText(tr("{count} lines").format(count=lines))
 
         # Trim if too many lines
         if lines > self._max_lines:
@@ -129,11 +131,11 @@ class LogPanel(QWidget):
     def _toggle_collapse(self) -> None:
         self._collapsed = not self._collapsed
         self._text.setVisible(not self._collapsed)
-        self._toggle_btn.setText("Logs +" if self._collapsed else "Logs")
+        self._toggle_btn.setText(tr("Logs +") if self._collapsed else tr("Logs"))
 
     def _set_filter(self, level: str) -> None:
         self._filter = level
 
     def _clear_logs(self) -> None:
         self._text.clear()
-        self._line_count.setText("0 lines")
+        self._line_count.setText(tr("0 lines"))

@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Slot, QTimer
 from PySide6.QtGui import QFont, QAction
 
+from core.i18n import tr
 from core.interface_manager import InterfaceManager
 from core.logger import get_logger, get_emitter
 from gui.tabs.dashboard_tab import DashboardTab
@@ -41,7 +42,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Holocaust — Network Auditor")
+        self.setWindowTitle(tr("Holocaust — Network Auditor"))
         self.setMinimumSize(1280, 800)
         self.resize(1440, 900)
 
@@ -79,7 +80,7 @@ class MainWindow(QMainWindow):
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(5, 5, 5, 5)
 
-        sidebar_title = QLabel("Targets")
+        sidebar_title = QLabel(tr("Targets"))
         sidebar_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         sidebar_title.setStyleSheet("color: #8ca8c4; padding: 5px;")
         sidebar_layout.addWidget(sidebar_title)
@@ -107,13 +108,13 @@ class MainWindow(QMainWindow):
         self._reports_tab = ReportsTab()
         self._settings_tab = SettingsTab()
 
-        self._tabs.addTab(self._dashboard, "Dashboard")
-        self._tabs.addTab(self._interfaces, "Interfaces & Wi-Fi")
-        self._tabs.addTab(self._lan, "LAN Scanner")
-        self._tabs.addTab(self._vulns_tab, "Vulnerabilities")
-        self._tabs.addTab(self._msf_tab, "Metasploit")
-        self._tabs.addTab(self._reports_tab, "Reports")
-        self._tabs.addTab(self._settings_tab, "Settings")
+        self._tabs.addTab(self._dashboard, tr("Dashboard"))
+        self._tabs.addTab(self._interfaces, tr("Interfaces & Wi-Fi"))
+        self._tabs.addTab(self._lan, tr("LAN Scanner"))
+        self._tabs.addTab(self._vulns_tab, tr("Vulnerabilities"))
+        self._tabs.addTab(self._msf_tab, tr("Metasploit"))
+        self._tabs.addTab(self._reports_tab, tr("Reports"))
+        self._tabs.addTab(self._settings_tab, tr("Settings"))
         content_splitter.addWidget(self._tabs)
 
         # Detail panel (bottom)
@@ -140,16 +141,16 @@ class MainWindow(QMainWindow):
         self._progress.setVisible(False)
         self._statusbar.addPermanentWidget(self._progress)
 
-        self._status_label = QLabel("Ready")
+        self._status_label = QLabel(tr("Ready"))
         self._statusbar.addWidget(self._status_label)
 
-        self._host_count_label = QLabel("Hosts: 0")
+        self._host_count_label = QLabel(tr("Hosts: {count}").format(count=0))
         self._statusbar.addPermanentWidget(self._host_count_label)
 
-        self._vuln_count_label = QLabel("Vulns: 0")
+        self._vuln_count_label = QLabel(tr("Vulns: {count}").format(count=0))
         self._statusbar.addPermanentWidget(self._vuln_count_label)
 
-        self._msf_status_label = QLabel("MSF: disconnected")
+        self._msf_status_label = QLabel(tr("MSF: disconnected"))
         self._msf_status_label.setStyleSheet("color: #a05050;")
         self._statusbar.addPermanentWidget(self._msf_status_label)
 
@@ -229,11 +230,11 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _start_full_scan(self, target: str) -> None:
         if self._scan_worker and self._scan_worker.isRunning():
-            QMessageBox.warning(self, "Scan Running", "A scan is already in progress.")
+            QMessageBox.warning(self, tr("Scan Running"), tr("A scan is already in progress."))
             return
 
         log.info(f"Starting full network scan on {target}")
-        self._status_label.setText(f"Scanning {target}...")
+        self._status_label.setText(tr("Scanning {target}...").format(target=target))
         self._progress.setVisible(True)
         self._progress.setValue(0)
         self._dashboard.set_scan_enabled(False)
@@ -257,7 +258,7 @@ class MainWindow(QMainWindow):
         self._dashboard.add_device(device)
         self._lan.add_device(device)
         self._add_device_card(device)
-        self._host_count_label.setText(f"Hosts: {len(self._devices)}")
+        self._host_count_label.setText(tr("Hosts: {count}").format(count=len(self._devices)))
 
     @Slot(object)
     def _on_host_updated(self, device: Device) -> None:
@@ -267,24 +268,24 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_scan_finished(self, result) -> None:
-        self._status_label.setText("Scan complete")
+        self._status_label.setText(tr("Scan complete"))
         self._progress.setVisible(False)
         self._dashboard.set_scan_enabled(True)
         log.info(f"Scan finished: {len(self._devices)} devices found")
 
     @Slot(str)
     def _on_scan_error(self, error: str) -> None:
-        self._status_label.setText(f"Scan error: {error}")
+        self._status_label.setText(tr("Scan error: {error}").format(error=error))
         self._progress.setVisible(False)
         self._dashboard.set_scan_enabled(True)
-        QMessageBox.critical(self, "Scan Error", error)
+        QMessageBox.critical(self, tr("Scan Error"), error)
 
     # === Vuln scan ===
 
     @Slot(list)
     def _start_vuln_scan(self, devices: list[Device]) -> None:
         if self._vuln_worker and self._vuln_worker.isRunning():
-            QMessageBox.warning(self, "Scan Running", "A vulnerability scan is in progress.")
+            QMessageBox.warning(self, tr("Scan Running"), tr("A vulnerability scan is in progress."))
             return
 
         log.info(f"Starting vuln scan on {len(devices)} devices")
@@ -301,11 +302,11 @@ class MainWindow(QMainWindow):
     def _on_vuln_found(self, vuln: Vulnerability) -> None:
         self._vulns.append(vuln)
         self._vulns_tab.add_vulnerability(vuln)
-        self._vuln_count_label.setText(f"Vulns: {len(self._vulns)}")
+        self._vuln_count_label.setText(tr("Vulns: {count}").format(count=len(self._vulns)))
 
     @Slot(list)
     def _on_vuln_scan_finished(self, vulns: list) -> None:
-        self._status_label.setText("Vulnerability scan complete")
+        self._status_label.setText(tr("Vulnerability scan complete"))
         self._progress.setVisible(False)
 
         critical = sum(1 for v in self._vulns
@@ -316,7 +317,7 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_device_selected(self, device: Device) -> None:
-        self._status_label.setText(f"Selected: {device.display_name} ({device.ip})")
+        self._status_label.setText(tr("Selected: {name} ({ip})").format(name=device.display_name, ip=device.ip))
 
     @Slot(object)
     def _on_device_inspect(self, device: Device) -> None:
@@ -337,23 +338,23 @@ class MainWindow(QMainWindow):
         if self._msf_bridge.is_connected:
             self._msf_bridge.disconnect()
             self._msf_tab.set_connected(False)
-            self._msf_status_label.setText("MSF: disconnected")
+            self._msf_status_label.setText(tr("MSF: disconnected"))
             self._msf_status_label.setStyleSheet("color: #a05050;")
             return
 
         success = self._msf_bridge.connect(host, port, password)
         self._msf_tab.set_connected(success)
         if success:
-            self._msf_status_label.setText("MSF: connected")
+            self._msf_status_label.setText(tr("MSF: connected"))
             self._msf_status_label.setStyleSheet("color: #4a8a5a;")
         else:
-            QMessageBox.warning(self, "Metasploit", "Failed to connect to msfrpcd.")
+            QMessageBox.warning(self, tr("Metasploit"), tr("Failed to connect to msfrpcd."))
 
     @Slot(object)
     def _on_exploit_requested(self, vuln: Vulnerability) -> None:
         if not self._msf_bridge.is_connected:
-            QMessageBox.warning(self, "Metasploit",
-                                "Connect to Metasploit first (Metasploit tab).")
+            QMessageBox.warning(self, tr("Metasploit"),
+                                tr("Connect to Metasploit first (Metasploit tab)."))
             return
 
         best = vuln.best_exploit
@@ -372,11 +373,12 @@ class MainWindow(QMainWindow):
                                  payload: str, options: dict) -> None:
         result = self._msf_bridge.run_exploit(module, target, port, payload, options)
         if "error" in result:
-            QMessageBox.critical(self, "Exploit Failed", result["error"])
+            QMessageBox.critical(self, tr("Exploit Failed"), result["error"])
         else:
             QMessageBox.information(
-                self, "Exploit Launched",
-                f"Job ID: {result.get('job_id')}\nModule: {module}\nTarget: {target}"
+                self, tr("Exploit Launched"),
+                tr("Job ID: {job_id}\nModule: {module}\nTarget: {target}").format(
+                    job_id=result.get('job_id'), module=module, target=target)
             )
 
     # === Reports ===
@@ -404,7 +406,7 @@ class MainWindow(QMainWindow):
         self._update_worker.finished.connect(self._on_update_finished)
         self._update_worker.error.connect(self._on_scan_error)
         self._progress.setVisible(True)
-        self._status_label.setText("Updating databases...")
+        self._status_label.setText(tr("Updating databases..."))
         self._update_worker.start()
 
     @Slot(dict)
@@ -412,7 +414,7 @@ class MainWindow(QMainWindow):
         self._progress.setVisible(False)
         successes = sum(1 for v in results.values() if v)
         total = len(results)
-        self._status_label.setText(f"Updates done: {successes}/{total} successful")
+        self._status_label.setText(tr("Updates done: {ok}/{total} successful").format(ok=successes, total=total))
         log.info(f"Database updates: {results}")
         # Auto-refresh DB status panel in Settings
         self._settings_tab._refresh_db_status()

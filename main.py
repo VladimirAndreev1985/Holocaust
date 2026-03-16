@@ -230,6 +230,17 @@ def main() -> int:
     # Step 5: Auto-update security databases if enabled in settings
     auto_update_databases(log)
 
+    # Step 6: Load language setting
+    import configparser
+    config = configparser.ConfigParser()
+    config_path = PROJECT_ROOT / "config" / "settings.ini"
+    if config_path.exists():
+        config.read(config_path)
+    lang = config.get("general", "language", fallback="en")
+    from core.i18n import set_language
+    set_language(lang)
+    log.info(f"Language set to: {lang}")
+
     # Launch GUI
     log.info("Launching GUI...")
 
