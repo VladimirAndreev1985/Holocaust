@@ -57,7 +57,7 @@ class SettingsTab(QWidget):
         headers = ["Component", "Status", "Details", "Last Updated"]
         for col, h in enumerate(headers):
             lbl = QLabel(h)
-            lbl.setStyleSheet("color: #e94560; font-weight: bold; font-size: 12px;")
+            lbl.setStyleSheet("color: #8ca8c4; font-weight: bold; font-size: 12px;")
             db_layout.addWidget(lbl, 0, col)
 
         self._db_status_labels: dict[str, dict[str, QLabel]] = {}
@@ -75,7 +75,7 @@ class SettingsTab(QWidget):
             details_lbl = QLabel("--")
             updated_lbl = QLabel("--")
             for lbl in (status_lbl, details_lbl, updated_lbl):
-                lbl.setStyleSheet("color: #8888aa;")
+                lbl.setStyleSheet("color: #606070;")
             db_layout.addWidget(name_lbl, row, 0)
             db_layout.addWidget(status_lbl, row, 1)
             db_layout.addWidget(details_lbl, row, 2)
@@ -204,7 +204,7 @@ class SettingsTab(QWidget):
                 r = subprocess.run(["nmap", "--version"], capture_output=True, text=True, timeout=5)
                 version = r.stdout.split("\n")[0].strip() if r.stdout else "installed"
                 nmap_labels["status"].setText("Installed")
-                nmap_labels["status"].setStyleSheet("color: #2ecc71; font-weight: bold;")
+                nmap_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
                 nmap_labels["details"].setText(version)
                 # Check script DB modification time
                 nse_path = Path("/usr/share/nmap/scripts/script.db")
@@ -215,10 +215,10 @@ class SettingsTab(QWidget):
                     nmap_labels["updated"].setText("N/A")
             except Exception:
                 nmap_labels["status"].setText("Installed")
-                nmap_labels["status"].setStyleSheet("color: #2ecc71; font-weight: bold;")
+                nmap_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
         else:
             nmap_labels["status"].setText("Not found")
-            nmap_labels["status"].setStyleSheet("color: #e74c3c; font-weight: bold;")
+            nmap_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
             nmap_labels["details"].setText("sudo apt install nmap")
 
         # --- Metasploit ---
@@ -226,7 +226,7 @@ class SettingsTab(QWidget):
         msf_path = shutil.which("msfconsole")
         if msf_path:
             msf_labels["status"].setText("Installed")
-            msf_labels["status"].setStyleSheet("color: #2ecc71; font-weight: bold;")
+            msf_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
             try:
                 import subprocess
                 r = subprocess.run(["msfconsole", "--version"], capture_output=True, text=True, timeout=10)
@@ -244,7 +244,7 @@ class SettingsTab(QWidget):
                 msf_labels["updated"].setText("N/A")
         else:
             msf_labels["status"].setText("Not found")
-            msf_labels["status"].setStyleSheet("color: #e74c3c; font-weight: bold;")
+            msf_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
             msf_labels["details"].setText("sudo apt install metasploit-framework")
 
         # --- CVE Cache ---
@@ -259,21 +259,21 @@ class SettingsTab(QWidget):
                 conn.close()
                 if count > 0:
                     cve_labels["status"].setText("Active")
-                    cve_labels["status"].setStyleSheet("color: #2ecc71; font-weight: bold;")
+                    cve_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
                     cve_labels["details"].setText(f"{count} CVE entries cached")
                 else:
                     cve_labels["status"].setText("Empty")
-                    cve_labels["status"].setStyleSheet("color: #f39c12; font-weight: bold;")
+                    cve_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
                     cve_labels["details"].setText("0 entries — run Update All")
                 mtime = datetime.fromtimestamp(cve_db_path.stat().st_mtime)
                 cve_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
             except Exception as e:
                 cve_labels["status"].setText("Error")
-                cve_labels["status"].setStyleSheet("color: #e74c3c; font-weight: bold;")
+                cve_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
                 cve_labels["details"].setText(str(e)[:50])
         else:
             cve_labels["status"].setText("Not created")
-            cve_labels["status"].setStyleSheet("color: #f39c12; font-weight: bold;")
+            cve_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
             cve_labels["details"].setText("Will be created on first run")
 
         # --- Device Signatures ---
@@ -291,8 +291,8 @@ class SettingsTab(QWidget):
                 total = sum(counts.values())
                 sig_labels["status"].setText("Active" if total > 0 else "Empty")
                 sig_labels["status"].setStyleSheet(
-                    "color: #2ecc71; font-weight: bold;" if total > 0
-                    else "color: #f39c12; font-weight: bold;"
+                    "color: #4a8a5a; font-weight: bold;" if total > 0
+                    else "color: #b09040; font-weight: bold;"
                 )
                 sig_labels["details"].setText(
                     f"OUI: {counts['oui_vendor']}, Ports: {counts['port_signature']}, "
@@ -302,22 +302,22 @@ class SettingsTab(QWidget):
                 sig_labels["updated"].setText(mtime.strftime("%Y-%m-%d %H:%M"))
             except Exception as e:
                 sig_labels["status"].setText("Error")
-                sig_labels["status"].setStyleSheet("color: #e74c3c; font-weight: bold;")
+                sig_labels["status"].setStyleSheet("color: #a05050; font-weight: bold;")
                 sig_labels["details"].setText(str(e)[:50])
         else:
             sig_labels["status"].setText("Not created")
-            sig_labels["status"].setStyleSheet("color: #f39c12; font-weight: bold;")
+            sig_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
 
         # --- Vulners API ---
         vuln_labels = self._db_status_labels["vulners"]
         api_key = self._vulners_key.text().strip()
         if api_key:
             vuln_labels["status"].setText("Configured")
-            vuln_labels["status"].setStyleSheet("color: #2ecc71; font-weight: bold;")
+            vuln_labels["status"].setStyleSheet("color: #4a8a5a; font-weight: bold;")
             vuln_labels["details"].setText(f"Key: {'*' * 8}...{api_key[-4:]}" if len(api_key) > 4 else "Key set")
         else:
             vuln_labels["status"].setText("No API key")
-            vuln_labels["status"].setStyleSheet("color: #f39c12; font-weight: bold;")
+            vuln_labels["status"].setStyleSheet("color: #b09040; font-weight: bold;")
             vuln_labels["details"].setText("Optional — works without key (limited)")
         vuln_labels["updated"].setText("N/A")
 

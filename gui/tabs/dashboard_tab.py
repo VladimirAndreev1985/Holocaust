@@ -16,15 +16,15 @@ from models.device import Device, DeviceType
 class StatCard(QFrame):
     """Compact stat display card."""
 
-    def __init__(self, title: str, value: str = "0", color: str = "#e94560", parent=None):
+    def __init__(self, title: str, value: str = "0", color: str = "#5a7ea0", parent=None):
         super().__init__(parent)
         self.setFrameStyle(QFrame.Shape.StyledPanel)
         self.setStyleSheet(f"""
             StatCard {{
-                background-color: #16213e;
-                border: 1px solid #2a2a4a;
-                border-top: 3px solid {color};
-                border-radius: 6px;
+                background-color: #18181e;
+                border: 1px solid #252530;
+                border-top: 2px solid {color};
+                border-radius: 4px;
             }}
         """)
         self.setFixedHeight(90)
@@ -39,7 +39,7 @@ class StatCard(QFrame):
 
         self._title_label = QLabel(title)
         self._title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._title_label.setStyleSheet("color: #8888aa; font-size: 11px; border: none;")
+        self._title_label.setStyleSheet("color: #606070; font-size: 11px; border: none;")
 
         layout.addWidget(self._value_label)
         layout.addWidget(self._title_label)
@@ -100,11 +100,11 @@ class DashboardTab(QWidget):
 
         # Stats row
         stats_layout = QHBoxLayout()
-        self._stat_hosts = StatCard("Hosts Found", "0", "#3498db")
-        self._stat_cameras = StatCard("IP Cameras", "0", "#e74c3c")
-        self._stat_pcs = StatCard("PCs / Servers", "0", "#2ecc71")
-        self._stat_vulns = StatCard("Vulnerabilities", "0", "#f39c12")
-        self._stat_critical = StatCard("Critical", "0", "#9b59b6")
+        self._stat_hosts = StatCard("Hosts Found", "0", "#5a7ea0")
+        self._stat_cameras = StatCard("IP Cameras", "0", "#a05050")
+        self._stat_pcs = StatCard("PCs / Servers", "0", "#4a8a5a")
+        self._stat_vulns = StatCard("Vulnerabilities", "0", "#b09040")
+        self._stat_critical = StatCard("Critical", "0", "#c04848")
 
         for card in [self._stat_hosts, self._stat_cameras, self._stat_pcs,
                      self._stat_vulns, self._stat_critical]:

@@ -11,11 +11,11 @@ from PySide6.QtGui import QTextCharFormat, QColor, QFont
 
 
 LEVEL_COLORS = {
-    "DEBUG": "#6c7a89",
-    "INFO": "#3498db",
-    "WARNING": "#f39c12",
-    "ERROR": "#e74c3c",
-    "CRITICAL": "#9b59b6",
+    "DEBUG": "#606070",
+    "INFO": "#5a7ea0",
+    "WARNING": "#b09040",
+    "ERROR": "#a05050",
+    "CRITICAL": "#c04848",
 }
 
 
@@ -37,13 +37,13 @@ class LogPanel(QWidget):
         # Header bar
         header = QFrame()
         header.setFixedHeight(32)
-        header.setStyleSheet("background-color: #16213e; border-bottom: 1px solid #2a2a4a;")
+        header.setStyleSheet("background-color: #18181e; border-bottom: 1px solid #252530;")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(10, 0, 10, 0)
 
         self._toggle_btn = QPushButton("Logs")
         self._toggle_btn.setFlat(True)
-        self._toggle_btn.setStyleSheet("color: #e94560; font-weight: bold; border: none;")
+        self._toggle_btn.setStyleSheet("color: #8ca8c4; font-weight: bold; border: none;")
         self._toggle_btn.clicked.connect(self._toggle_collapse)
 
         self._filter_combo = QComboBox()
@@ -72,7 +72,7 @@ class LogPanel(QWidget):
         self._text.setFont(QFont("Consolas", 11))
         self._text.setStyleSheet("""
             QTextEdit {
-                background-color: #0a0a1a;
+                background-color: #0b0b0f;
                 border: none;
                 padding: 5px;
             }
@@ -109,7 +109,7 @@ class LogPanel(QWidget):
 
         # Message
         msg_fmt = QTextCharFormat()
-        msg_fmt.setForeground(QColor("#e0e0e0"))
+        msg_fmt.setForeground(QColor("#b0b0b8"))
         cursor.insertText(f"{message}\n", msg_fmt)
 
         # Auto-scroll

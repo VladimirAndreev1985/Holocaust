@@ -55,7 +55,7 @@ class ReportsTab(QWidget):
         gen_layout.addLayout(btn_layout)
 
         self._status_label = QLabel("")
-        self._status_label.setStyleSheet("color: #8888aa;")
+        self._status_label.setStyleSheet("color: #606070;")
         gen_layout.addWidget(self._status_label)
         layout.addWidget(gen_group)
 
@@ -71,7 +71,7 @@ class ReportsTab(QWidget):
     def set_report_generated(self, path: Path) -> None:
         self._last_report_path = path
         self._status_label.setText(f"Report saved: {path}")
-        self._status_label.setStyleSheet("color: #2ecc71;")
+        self._status_label.setStyleSheet("color: #4a8a5a;")
 
         # Load HTML preview
         if path.suffix == ".html":

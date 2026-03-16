@@ -33,19 +33,19 @@ class DetailPanel(QWidget):
         # Header
         header = QFrame()
         header.setFixedHeight(36)
-        header.setStyleSheet("background-color: #16213e; border-bottom: 2px solid #e94560;")
+        header.setStyleSheet("background-color: #18181e; border-bottom: 1px solid #5a7ea0;")
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(10, 0, 10, 0)
 
         self._title = QLabel("Device Details")
         self._title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        self._title.setStyleSheet("color: #e94560; border: none;")
+        self._title.setStyleSheet("color: #8ca8c4; border: none;")
 
         close_btn = QPushButton("X")
         close_btn.setFixedSize(24, 24)
         close_btn.setStyleSheet("""
             QPushButton { background: transparent; color: #888; border: none; font-weight: bold; }
-            QPushButton:hover { color: #e94560; }
+            QPushButton:hover { color: #8ca8c4; }
         """)
         close_btn.clicked.connect(self.close_requested.emit)
 
@@ -104,9 +104,9 @@ class DetailPanel(QWidget):
         for i, (label_text, key) in enumerate(fields):
             row, col = i // 2, (i % 2) * 2
             label = QLabel(label_text)
-            label.setStyleSheet("color: #8888aa; font-weight: bold; border: none;")
+            label.setStyleSheet("color: #606070; font-weight: bold; border: none;")
             value = QLabel("—")
-            value.setStyleSheet("color: #e0e0e0; border: none;")
+            value.setStyleSheet("color: #b0b0b8; border: none;")
             value.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             layout.addWidget(label, row, col)
             layout.addWidget(value, row, col + 1)

@@ -79,11 +79,11 @@ def format_duration(seconds: float) -> str:
 
 def severity_to_color(severity: str) -> str:
     colors = {
-        "info": "#3498db",
-        "low": "#2ecc71",
-        "medium": "#f39c12",
-        "high": "#e74c3c",
-        "critical": "#9b59b6",
+        "info": "#5a7ea0",
+        "low": "#4a8a5a",
+        "medium": "#b09040",
+        "high": "#a05050",
+        "critical": "#c04848",
     }
     return colors.get(severity.lower(), "#888888")
 

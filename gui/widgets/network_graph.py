@@ -19,26 +19,26 @@ from models.device import Device, DeviceType, RiskLevel
 
 
 DEVICE_COLORS = {
-    DeviceType.ROUTER: "#3498db",
-    DeviceType.ACCESS_POINT: "#2980b9",
-    DeviceType.PC_WINDOWS: "#2ecc71",
-    DeviceType.PC_LINUX: "#27ae60",
-    DeviceType.PC_MAC: "#1abc9c",
-    DeviceType.LAPTOP: "#16a085",
-    DeviceType.SERVER: "#8e44ad",
-    DeviceType.PHONE_ANDROID: "#f39c12",
-    DeviceType.PHONE_IOS: "#e67e22",
-    DeviceType.TABLET: "#d35400",
-    DeviceType.IP_CAMERA: "#e74c3c",
-    DeviceType.NVR_DVR: "#c0392b",
-    DeviceType.SMART_TV: "#9b59b6",
-    DeviceType.PRINTER: "#95a5a6",
-    DeviceType.NAS: "#7f8c8d",
-    DeviceType.IOT: "#1abc9c",
-    DeviceType.VOIP: "#34495e",
-    DeviceType.FIREWALL: "#2c3e50",
-    DeviceType.SWITCH: "#2980b9",
-    DeviceType.UNKNOWN: "#555555",
+    DeviceType.ROUTER: "#5a7ea0",
+    DeviceType.ACCESS_POINT: "#4a7090",
+    DeviceType.PC_WINDOWS: "#4a8a5a",
+    DeviceType.PC_LINUX: "#3a7a4a",
+    DeviceType.PC_MAC: "#4a8080",
+    DeviceType.LAPTOP: "#3a7070",
+    DeviceType.SERVER: "#7060a0",
+    DeviceType.PHONE_ANDROID: "#b09040",
+    DeviceType.PHONE_IOS: "#a08030",
+    DeviceType.TABLET: "#907030",
+    DeviceType.IP_CAMERA: "#a05050",
+    DeviceType.NVR_DVR: "#904040",
+    DeviceType.SMART_TV: "#806090",
+    DeviceType.PRINTER: "#707078",
+    DeviceType.NAS: "#606068",
+    DeviceType.IOT: "#4a8080",
+    DeviceType.VOIP: "#506070",
+    DeviceType.FIREWALL: "#405060",
+    DeviceType.SWITCH: "#4a7090",
+    DeviceType.UNKNOWN: "#484850",
 }
 
 NODE_SIZE = 40
@@ -147,7 +147,7 @@ class EdgeLine(QGraphicsLineItem):
         super().__init__()
         self.source = source
         self.target = target
-        self.setPen(QPen(QColor("#2a2a4a"), 1.5, Qt.PenStyle.SolidLine))
+        self.setPen(QPen(QColor("#252530"), 1.5, Qt.PenStyle.SolidLine))
         self.setZValue(1)
         self.update_position()
 
@@ -176,7 +176,7 @@ class NetworkGraph(QGraphicsView):
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.SmartViewportUpdate)
 
-        self.setStyleSheet("background-color: #0a0a1a; border: 1px solid #2a2a4a;")
+        self.setStyleSheet("background-color: #0b0b0f; border: 1px solid #252530;")
 
         self._nodes: dict[str, DeviceNode] = {}  # ip -> node
         self._gateway_ip: str = ""

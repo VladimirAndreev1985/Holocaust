@@ -34,7 +34,7 @@ class MetasploitTab(QWidget):
         header.addStretch()
 
         self._status_label = QLabel("Disconnected")
-        self._status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        self._status_label.setStyleSheet("color: #a05050; font-weight: bold;")
         header.addWidget(self._status_label)
 
         self._connect_btn = QPushButton("Connect to msfrpcd")
@@ -167,11 +167,11 @@ class MetasploitTab(QWidget):
         self._connected = connected
         if connected:
             self._status_label.setText("Connected")
-            self._status_label.setStyleSheet("color: #2ecc71; font-weight: bold;")
+            self._status_label.setStyleSheet("color: #4a8a5a; font-weight: bold;")
             self._connect_btn.setText("Disconnect")
         else:
             self._status_label.setText("Disconnected")
-            self._status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self._status_label.setStyleSheet("color: #a05050; font-weight: bold;")
             self._connect_btn.setText("Connect to msfrpcd")
 
     def set_search_results(self, results: list[dict]) -> None:
@@ -183,9 +183,9 @@ class MetasploitTab(QWidget):
             rank_item = QTableWidgetItem(mod.get("rank", ""))
             rank = mod.get("rank", "").lower()
             if rank == "excellent":
-                rank_item.setForeground(QColor("#2ecc71"))
+                rank_item.setForeground(QColor("#4a8a5a"))
             elif rank == "good":
-                rank_item.setForeground(QColor("#f39c12"))
+                rank_item.setForeground(QColor("#b09040"))
             self._modules_table.setItem(row, 2, rank_item)
 
             self._modules_table.setItem(row, 3, QTableWidgetItem(mod.get("description", "")))

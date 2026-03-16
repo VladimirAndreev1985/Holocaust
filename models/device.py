@@ -39,11 +39,11 @@ class RiskLevel(enum.Enum):
     @property
     def color(self) -> str:
         return {
-            RiskLevel.UNKNOWN: "#888888",
-            RiskLevel.LOW: "#2ecc71",
-            RiskLevel.MEDIUM: "#f39c12",
-            RiskLevel.HIGH: "#e74c3c",
-            RiskLevel.CRITICAL: "#9b59b6",
+            RiskLevel.UNKNOWN: "#606070",
+            RiskLevel.LOW: "#4a8a5a",
+            RiskLevel.MEDIUM: "#b09040",
+            RiskLevel.HIGH: "#a05050",
+            RiskLevel.CRITICAL: "#c04848",
         }[self]
 
 

@@ -81,7 +81,7 @@ class MainWindow(QMainWindow):
 
         sidebar_title = QLabel("Targets")
         sidebar_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        sidebar_title.setStyleSheet("color: #e94560; padding: 5px;")
+        sidebar_title.setStyleSheet("color: #8ca8c4; padding: 5px;")
         sidebar_layout.addWidget(sidebar_title)
 
         self._device_list_area = QScrollArea()
@@ -150,7 +150,7 @@ class MainWindow(QMainWindow):
         self._statusbar.addPermanentWidget(self._vuln_count_label)
 
         self._msf_status_label = QLabel("MSF: disconnected")
-        self._msf_status_label.setStyleSheet("color: #e74c3c;")
+        self._msf_status_label.setStyleSheet("color: #a05050;")
         self._statusbar.addPermanentWidget(self._msf_status_label)
 
     def _connect_signals(self) -> None:
@@ -338,14 +338,14 @@ class MainWindow(QMainWindow):
             self._msf_bridge.disconnect()
             self._msf_tab.set_connected(False)
             self._msf_status_label.setText("MSF: disconnected")
-            self._msf_status_label.setStyleSheet("color: #e74c3c;")
+            self._msf_status_label.setStyleSheet("color: #a05050;")
             return
 
         success = self._msf_bridge.connect(host, port, password)
         self._msf_tab.set_connected(success)
         if success:
             self._msf_status_label.setText("MSF: connected")
-            self._msf_status_label.setStyleSheet("color: #2ecc71;")
+            self._msf_status_label.setStyleSheet("color: #4a8a5a;")
         else:
             QMessageBox.warning(self, "Metasploit", "Failed to connect to msfrpcd.")
 

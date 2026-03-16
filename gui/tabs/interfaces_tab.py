@@ -124,9 +124,9 @@ class InterfacesTab(QWidget):
 
             status_item = QTableWidgetItem(iface.display_status)
             if iface.is_up:
-                status_item.setForeground(QColor("#2ecc71"))
+                status_item.setForeground(QColor("#4a8a5a"))
             else:
-                status_item.setForeground(QColor("#e74c3c"))
+                status_item.setForeground(QColor("#a05050"))
             self._iface_table.setItem(row, 2, status_item)
 
             self._iface_table.setItem(row, 3, QTableWidgetItem(iface.mode.value))
@@ -144,16 +144,16 @@ class InterfacesTab(QWidget):
 
             signal_item = QTableWidgetItem(f"{net.signal_strength} dBm ({net.signal_quality})")
             if net.signal_strength >= -50:
-                signal_item.setForeground(QColor("#2ecc71"))
+                signal_item.setForeground(QColor("#4a8a5a"))
             elif net.signal_strength >= -70:
-                signal_item.setForeground(QColor("#f39c12"))
+                signal_item.setForeground(QColor("#b09040"))
             else:
-                signal_item.setForeground(QColor("#e74c3c"))
+                signal_item.setForeground(QColor("#a05050"))
             self._wifi_table.setItem(row, 3, signal_item)
 
             enc_item = QTableWidgetItem(net.encryption)
             if net.is_open:
-                enc_item.setForeground(QColor("#e74c3c"))
+                enc_item.setForeground(QColor("#a05050"))
                 enc_item.setText("OPEN")
             self._wifi_table.setItem(row, 4, enc_item)
 

@@ -35,7 +35,7 @@ class VulnsTab(QWidget):
         header.addStretch()
 
         self._count_label = QLabel("0 vulnerabilities")
-        self._count_label.setStyleSheet("color: #8888aa;")
+        self._count_label.setStyleSheet("color: #606070;")
         header.addWidget(self._count_label)
         layout.addLayout(header)
 
@@ -157,7 +157,7 @@ class VulnsTab(QWidget):
 
             exp_item = QTableWidgetItem("YES" if vuln.is_exploitable else "No")
             if vuln.is_exploitable:
-                exp_item.setForeground(QColor("#e74c3c"))
+                exp_item.setForeground(QColor("#a05050"))
             self._table.setItem(row, 6, exp_item)
 
             # Store reference

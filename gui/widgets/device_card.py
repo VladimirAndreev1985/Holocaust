@@ -43,15 +43,15 @@ class DeviceCard(QFrame):
         self.setFixedHeight(80)
         self.setStyleSheet(f"""
             DeviceCard {{
-                background-color: #16213e;
-                border: 1px solid #2a2a4a;
-                border-left: 4px solid {device.risk_level.color};
-                border-radius: 6px;
+                background-color: #18181e;
+                border: 1px solid #252530;
+                border-left: 3px solid {device.risk_level.color};
+                border-radius: 4px;
                 padding: 8px;
             }}
             DeviceCard:hover {{
-                background-color: #1e2a4a;
-                border-color: #e94560;
+                background-color: #1c1c24;
+                border-color: #5a7ea0;
             }}
         """)
         self._setup_ui()
@@ -79,14 +79,14 @@ class DeviceCard(QFrame):
 
         name = QLabel(self.device.display_name)
         name.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        name.setStyleSheet("color: #e0e0e0; border: none; background: transparent;")
+        name.setStyleSheet("color: #b0b0b8; border: none; background: transparent;")
 
         details = QLabel(
             f"{self.device.ip}  |  "
             f"{self.device.device_type.value}  |  "
             f"{len(self.device.open_ports)} ports"
         )
-        details.setStyleSheet("color: #8888aa; font-size: 11px; border: none; background: transparent;")
+        details.setStyleSheet("color: #606070; font-size: 11px; border: none; background: transparent;")
 
         risk_text = f"Risk: {self.device.risk_level.value.upper()}"
         if self.device.vulnerabilities:
@@ -117,14 +117,14 @@ class DeviceCard(QFrame):
         self._setup_ui()
         self.setStyleSheet(f"""
             DeviceCard {{
-                background-color: #16213e;
-                border: 1px solid #2a2a4a;
-                border-left: 4px solid {device.risk_level.color};
-                border-radius: 6px;
+                background-color: #18181e;
+                border: 1px solid #252530;
+                border-left: 3px solid {device.risk_level.color};
+                border-radius: 4px;
                 padding: 8px;
             }}
             DeviceCard:hover {{
-                background-color: #1e2a4a;
-                border-color: #e94560;
+                background-color: #1c1c24;
+                border-color: #5a7ea0;
             }}
         """)

@@ -89,7 +89,7 @@ class LanTab(QWidget):
         filter_layout.addStretch()
 
         self._count_label = QLabel("0 devices")
-        self._count_label.setStyleSheet("color: #8888aa;")
+        self._count_label.setStyleSheet("color: #606070;")
         filter_layout.addWidget(self._count_label)
 
         layout.addLayout(filter_layout)
@@ -167,7 +167,7 @@ class LanTab(QWidget):
 
             type_item = QTableWidgetItem(device.device_type.value)
             if device.device_type == DeviceType.IP_CAMERA:
-                type_item.setForeground(QColor("#e74c3c"))
+                type_item.setForeground(QColor("#a05050"))
             self._table.setItem(row, 4, type_item)
 
             self._table.setItem(row, 5, QTableWidgetItem(device.os_name or "—"))
