@@ -288,7 +288,7 @@ class MainWindow(QMainWindow):
         self._dashboard.device_selected.connect(self._on_device_selected)
         self._dashboard.device_inspect.connect(self._on_device_inspect)
 
-        # Network graph context menu signals
+        # Network graph context menu signals + selection sync
         graph = self._dashboard.network_graph
         graph.device_scan_quick.connect(lambda d: self._scan_single_host(d, ScanDepth.QUICK))
         graph.device_scan_standard.connect(lambda d: self._scan_single_host(d, ScanDepth.STANDARD))
@@ -296,6 +296,7 @@ class MainWindow(QMainWindow):
         graph.device_vuln_scan.connect(lambda d: self._start_vuln_scan([d]))
         graph.device_send_to_msf.connect(self._send_device_to_msf)
         graph.device_remove.connect(self._remove_device)
+        graph.device_selection_toggled.connect(self._on_graph_selection_toggled)
 
         # Interfaces
         self._interfaces.interface_up.connect(
@@ -590,10 +591,25 @@ class MainWindow(QMainWindow):
     # === Multi-select / batch operations ===
 
     def _on_card_selection_changed(self, device: Device, selected: bool) -> None:
+        """Card checkbox/click changed — sync to graph and update set."""
         if selected:
             self._selected_devices.add(device.ip)
         else:
             self._selected_devices.discard(device.ip)
+        # Sync to graph node
+        self._dashboard.network_graph.set_node_checked(device.ip, selected)
+        self._update_selection_label()
+
+    def _on_graph_selection_toggled(self, ip: str, selected: bool) -> None:
+        """Graph node clicked — sync to sidebar card and update set."""
+        if selected:
+            self._selected_devices.add(ip)
+        else:
+            self._selected_devices.discard(ip)
+        # Sync to sidebar card (emit=False to avoid loop)
+        card = self._device_cards.get(ip)
+        if card:
+            card.set_selected(selected, emit=False)
         self._update_selection_label()
 
     def _update_selection_label(self) -> None:
@@ -605,16 +621,19 @@ class MainWindow(QMainWindow):
 
     def _toggle_select_all(self) -> None:
         """Toggle select all / deselect all."""
+        graph = self._dashboard.network_graph
         if self._selected_devices:
             # Deselect all
             for card in self._device_cards.values():
-                card.set_selected(False)
+                card.set_selected(False, emit=False)
+            graph.set_all_checked(False)
             self._selected_devices.clear()
         else:
             # Select all
             for ip, card in self._device_cards.items():
-                card.set_selected(True)
+                card.set_selected(True, emit=False)
                 self._selected_devices.add(ip)
+            graph.set_all_checked(True)
         self._update_selection_label()
 
     def _get_selected_devices(self) -> list[Device]:

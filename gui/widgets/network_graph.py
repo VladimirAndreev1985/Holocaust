@@ -44,6 +44,7 @@ DEVICE_COLORS = {
 }
 
 NODE_SIZE = 40
+SELECTION_COLOR = "#5a7ea0"
 
 
 class DeviceNode(QGraphicsEllipseItem):
@@ -52,27 +53,21 @@ class DeviceNode(QGraphicsEllipseItem):
     def __init__(self, device: Device, x: float, y: float):
         super().__init__(-NODE_SIZE/2, -NODE_SIZE/2, NODE_SIZE, NODE_SIZE)
         self.device = device
+        self._is_checked = False  # our custom selection (not Qt's item selection)
         self.setPos(x, y)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
-        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAcceptHoverEvents(True)
         self.setZValue(10)
 
-        # Color based on device type
-        base_color = QColor(DEVICE_COLORS.get(device.device_type, "#555555"))
+        self._base_color = QColor(DEVICE_COLORS.get(device.device_type, "#555555"))
+        self._apply_fill()
 
-        # Gradient fill
-        gradient = QRadialGradient(0, 0, NODE_SIZE/2)
-        gradient.setColorAt(0, base_color.lighter(130))
-        gradient.setColorAt(1, base_color)
-        self.setBrush(QBrush(gradient))
-
-        # Border based on risk
-        pen_color = QColor(device.risk_level.color)
-        pen = QPen(pen_color, 2)
-        self.setPen(pen)
+        # Border based on risk (default)
+        self._risk_pen_color = QColor(device.risk_level.color)
+        self._apply_border()
 
         # Label
         self._label = QGraphicsTextItem(self)
@@ -105,6 +100,33 @@ class DeviceNode(QGraphicsEllipseItem):
         self.setToolTip(tooltip)
 
         self._edges: list[EdgeLine] = []
+
+    @property
+    def is_checked(self) -> bool:
+        return self._is_checked
+
+    def set_checked(self, checked: bool) -> None:
+        """Set custom selection state with visual feedback."""
+        self._is_checked = checked
+        self._apply_border()
+        self._apply_fill()
+
+    def _apply_fill(self) -> None:
+        gradient = QRadialGradient(0, 0, NODE_SIZE/2)
+        if self._is_checked:
+            gradient.setColorAt(0, self._base_color.lighter(160))
+            gradient.setColorAt(1, self._base_color.lighter(120))
+        else:
+            gradient.setColorAt(0, self._base_color.lighter(130))
+            gradient.setColorAt(1, self._base_color)
+        self.setBrush(QBrush(gradient))
+
+    def _apply_border(self) -> None:
+        if self._is_checked:
+            pen = QPen(QColor(SELECTION_COLOR), 3, Qt.PenStyle.SolidLine)
+        else:
+            pen = QPen(self._risk_pen_color, 2)
+        self.setPen(pen)
 
     def add_edge(self, edge: EdgeLine) -> None:
         self._edges.append(edge)
@@ -168,6 +190,8 @@ class NetworkGraph(QGraphicsView):
 
     device_clicked = Signal(object)         # Device
     device_double_clicked = Signal(object)  # Device
+    # Emitted when user clicks a node to toggle selection
+    device_selection_toggled = Signal(str, bool)  # ip, is_selected
 
     # Context menu action signals
     device_scan_quick = Signal(object)      # Device
@@ -222,14 +246,16 @@ class NetworkGraph(QGraphicsView):
                 self._scene.addItem(edge)
 
     def update_device(self, device: Device) -> None:
-        """Update an existing device node."""
+        """Update an existing device node (preserves selection state)."""
         if device.ip in self._nodes:
             old_node = self._nodes[device.ip]
             pos = old_node.pos()
+            was_checked = old_node.is_checked
             self._scene.removeItem(old_node)
             del self._nodes[device.ip]
 
             new_node = DeviceNode(device, pos.x(), pos.y())
+            new_node.set_checked(was_checked)
             self._scene.addItem(new_node)
             self._nodes[device.ip] = new_node
 
@@ -244,6 +270,17 @@ class NetworkGraph(QGraphicsView):
         if ip in self._nodes:
             node = self._nodes.pop(ip)
             self._scene.removeItem(node)
+
+    def set_node_checked(self, ip: str, checked: bool) -> None:
+        """Set selection state of a node (called from MainWindow to sync)."""
+        node = self._nodes.get(ip)
+        if node:
+            node.set_checked(checked)
+
+    def set_all_checked(self, checked: bool) -> None:
+        """Set selection state on all nodes."""
+        for node in self._nodes.values():
+            node.set_checked(checked)
 
     def clear_graph(self) -> None:
         self._scene.clear()
@@ -321,6 +358,10 @@ class NetworkGraph(QGraphicsView):
         if event.button() == Qt.MouseButton.LeftButton:
             node = self._get_node_at(event.pos())
             if node:
+                # Toggle selection on click
+                new_state = not node.is_checked
+                node.set_checked(new_state)
+                self.device_selection_toggled.emit(node.device.ip, new_state)
                 self.device_clicked.emit(node.device)
         super().mousePressEvent(event)
 

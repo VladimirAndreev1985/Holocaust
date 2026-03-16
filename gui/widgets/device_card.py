@@ -64,10 +64,17 @@ class DeviceCard(QFrame):
     def is_selected(self) -> bool:
         return self._selected
 
-    def set_selected(self, selected: bool) -> None:
+    def set_selected(self, selected: bool, emit: bool = True) -> None:
+        """Set selection state. If emit=False, don't fire selection_changed signal."""
+        if self._selected == selected:
+            return
         self._selected = selected
+        self._checkbox.blockSignals(True)
         self._checkbox.setChecked(selected)
+        self._checkbox.blockSignals(False)
         self._apply_style()
+        if emit:
+            self.selection_changed.emit(self.device, selected)
 
     def _apply_style(self) -> None:
         border_color = "#5a7ea0" if self._selected else "#252530"
@@ -190,6 +197,9 @@ class DeviceCard(QFrame):
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
+            # Toggle selection on click anywhere on the card
+            new_state = not self._selected
+            self.set_selected(new_state)
             self.clicked.emit(self.device)
         super().mousePressEvent(event)
 
