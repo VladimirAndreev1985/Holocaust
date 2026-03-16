@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QMenu, QApplication,
-    QCheckBox, QLayout,
+    QCheckBox, QLayout, QSizePolicy,
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont, QAction
@@ -152,13 +152,16 @@ class DeviceCard(QFrame):
         self._name_label = QLabel(display_name)
         self._name_label.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self._name_label.setStyleSheet("color: #b0b0b8; border: none; background: transparent;")
+        self._name_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-        self._details_label = QLabel(
+        detail_text = (
             f"{self.device.ip}  |  "
             f"{self.device.device_type.value}  |  "
             f"{tr('{ports} ports').format(ports=len(self.device.open_ports))}"
         )
+        self._details_label = QLabel(detail_text)
         self._details_label.setStyleSheet("color: #606070; font-size: 11px; border: none; background: transparent;")
+        self._details_label.setWordWrap(True)
 
         risk_text = tr("Risk: {level}").format(level=self.device.risk_level.value.upper())
         if self.device.vulnerabilities:

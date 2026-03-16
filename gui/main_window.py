@@ -314,8 +314,8 @@ class MainWindow(QMainWindow):
 
         # === Left sidebar: device tree ===
         sidebar = QWidget()
-        sidebar.setMinimumWidth(200)
-        sidebar.setMaximumWidth(350)
+        sidebar.setMinimumWidth(240)
+        sidebar.setMaximumWidth(400)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(5, 5, 5, 5)
         sidebar_layout.setSpacing(4)
@@ -466,7 +466,7 @@ class MainWindow(QMainWindow):
         content_splitter.setSizes([600, 250])
 
         self._main_splitter.addWidget(content_splitter)
-        self._main_splitter.setSizes([250, 1000])
+        self._main_splitter.setSizes([280, 1000])
 
         main_layout.addWidget(self._main_splitter, 1)
 
