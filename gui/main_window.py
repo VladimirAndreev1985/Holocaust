@@ -722,10 +722,19 @@ class MainWindow(QMainWindow):
 
     @Slot(object)
     def _on_host_found(self, device: Device) -> None:
+        is_new = device.ip not in self._devices
         self._devices[device.ip] = device
-        self._dashboard.add_device(device)
-        self._lan.add_device(device)
-        self._add_device_card(device)
+
+        if is_new:
+            self._dashboard.add_device(device)
+            self._lan.add_device(device)
+            self._add_device_card(device)
+        else:
+            self._dashboard.update_device(device)
+            self._lan.update_device(device)
+            if device.ip in self._device_cards:
+                self._device_cards[device.ip].update_device(device)
+
         self._host_count_label.setText(tr("Hosts: {count}").format(count=len(self._devices)))
 
     @Slot(object)
