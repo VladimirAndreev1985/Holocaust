@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QMenu, QApplication,
     QCheckBox, QLayout,
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont, QAction
 
 from core.i18n import tr
@@ -225,9 +225,24 @@ class DeviceCard(QFrame):
         self.double_clicked.emit(self.device)
         super().mouseDoubleClickEvent(event)
 
-    def update_device(self, device: Device) -> None:
+    def update_device(self, device: Device, flash: bool = False) -> None:
         """Update card with new device data. Preserves selection state."""
         self.device = device
         self._clear_layout()
         self._build_content()
         self._apply_style()
+        if flash:
+            self._flash_highlight()
+
+    def _flash_highlight(self) -> None:
+        """Briefly flash the card border to indicate it was updated."""
+        self.setStyleSheet(f"""
+            DeviceCard {{
+                background-color: #1e2230;
+                border: 2px solid #4a9a5a;
+                border-left: 3px solid #4a9a5a;
+                border-radius: 4px;
+                padding: 8px;
+            }}
+        """)
+        QTimer.singleShot(1500, self._apply_style)

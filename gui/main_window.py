@@ -64,6 +64,7 @@ class MainWindow(QMainWindow):
         self._scan_worker: FullScanWorker | None = None
         self._vuln_worker: VulnScanWorker | None = None
         self._host_worker: HostScanWorker | None = None
+        self._host_scan_ips: list[str] = []
         self._update_worker: UpdateWorker | None = None
 
         self._setup_ui()
@@ -472,6 +473,9 @@ class MainWindow(QMainWindow):
             ips += f" (+{len(devices) - 3})"
         log.info(f"Rescanning {len(devices)} host(s) at {depth.value}: {ips}")
 
+        # Remember which hosts we're scanning for post-scan actions
+        self._host_scan_ips = [d.ip for d in devices]
+
         self._progress.setVisible(True)
         self._progress.setValue(0)
         self._status_label.setText(
@@ -480,11 +484,36 @@ class MainWindow(QMainWindow):
 
         self._host_worker = HostScanWorker(devices, config, vuln_scan=vuln_scan)
         self._host_worker.progress.connect(self._on_scan_progress)
-        self._host_worker.host_updated.connect(self._on_host_updated)
+        self._host_worker.host_updated.connect(self._on_host_scanned)
         self._host_worker.vuln_found.connect(self._on_vuln_found)
         self._host_worker.finished.connect(self._on_host_scan_finished)
         self._host_worker.error.connect(self._on_scan_error)
         self._host_worker.start()
+
+    @Slot(object)
+    def _on_host_scanned(self, device: Device) -> None:
+        """Called when a single host finishes rescanning — update + flash + log summary."""
+        self._devices[device.ip] = device
+        self._dashboard.update_device(device)
+        self._lan.update_device(device)
+
+        # Flash the sidebar card green to show it was updated
+        card = self._device_cards.get(device.ip)
+        if card:
+            card.update_device(device, flash=True)
+
+        # Log a summary of what was found
+        ports_str = ", ".join(str(p) for p in device.open_ports[:10])
+        if len(device.open_ports) > 10:
+            ports_str += f" (+{len(device.open_ports) - 10})"
+        os_str = f"{device.os_name} {device.os_version}".strip() or "unknown"
+        log.info(
+            f"Scan result: {device.ip} — "
+            f"type={device.device_type.value}, "
+            f"OS={os_str}, "
+            f"ports=[{ports_str}], "
+            f"services={len(device.services)}"
+        )
 
     @Slot()
     def _on_host_scan_finished(self) -> None:
@@ -494,6 +523,28 @@ class MainWindow(QMainWindow):
         critical = sum(1 for v in self._vulns
                        if v.severity.value in ("critical", "high"))
         self._dashboard.set_vuln_count(len(self._vulns), critical)
+
+        # Auto-open detail panel for scanned host(s)
+        scanned_ips = getattr(self, "_host_scan_ips", [])
+        if len(scanned_ips) == 1:
+            # Single host — open its details automatically
+            device = self._devices.get(scanned_ips[0])
+            if device:
+                self._on_device_inspect(device)
+        elif scanned_ips:
+            # Multiple hosts — open details for the last one
+            device = self._devices.get(scanned_ips[-1])
+            if device:
+                self._on_device_inspect(device)
+
+        # Log overall summary
+        total_ports = sum(len(self._devices[ip].open_ports) for ip in scanned_ips if ip in self._devices)
+        total_services = sum(len(self._devices[ip].services) for ip in scanned_ips if ip in self._devices)
+        log.info(
+            f"Host scan complete: {len(scanned_ips)} host(s), "
+            f"{total_ports} open ports, {total_services} services detected"
+        )
+        self._host_scan_ips = []
 
     # === Vuln scan ===
 
