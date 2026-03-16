@@ -957,6 +957,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "Stop": {
         "ru": "Стоп",
     },
+    "Stop Scan": {
+        "ru": "Остановить сканирование",
+    },
     "Scan aborted": {
         "ru": "Сканирование прервано",
     },

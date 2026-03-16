@@ -17,19 +17,19 @@ from core.i18n import tr
 
 
 class StatCard(QFrame):
-    """Compact stat display card."""
+    """Compact stat display card. Clickable — emits clicked signal."""
 
-    def __init__(self, title: str, value: str = "0", color: str = "#5a7ea0", parent=None):
+    clicked = Signal(str)  # filter_key
+
+    def __init__(self, title: str, value: str = "0", color: str = "#5a7ea0",
+                 filter_key: str = "", parent=None):
         super().__init__(parent)
+        self._color = color
+        self._filter_key = filter_key
+        self._active = False
         self.setFrameStyle(QFrame.Shape.StyledPanel)
-        self.setStyleSheet(f"""
-            StatCard {{
-                background-color: #18181e;
-                border: 1px solid #252530;
-                border-top: 2px solid {color};
-                border-radius: 4px;
-            }}
-        """)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._apply_style()
         self.setFixedHeight(90)
 
         layout = QVBoxLayout(self)
@@ -50,11 +50,40 @@ class StatCard(QFrame):
     def set_value(self, value: str) -> None:
         self._value_label.setText(value)
 
+    def set_active(self, active: bool) -> None:
+        self._active = active
+        self._apply_style()
+
+    def _apply_style(self) -> None:
+        border_w = "2px" if self._active else "1px"
+        border_c = self._color if self._active else "#252530"
+        bg = "#1c1c28" if self._active else "#18181e"
+        self.setStyleSheet(f"""
+            StatCard {{
+                background-color: {bg};
+                border: {border_w} solid {border_c};
+                border-top: 2px solid {self._color};
+                border-radius: 4px;
+            }}
+            StatCard:hover {{
+                background-color: #1c1c24;
+                border-color: {self._color};
+                border-top: 2px solid {self._color};
+            }}
+        """)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self._filter_key:
+            self.clicked.emit(self._filter_key)
+        super().mousePressEvent(event)
+
 
 class DashboardTab(QWidget):
     """Main dashboard with network graph and quick stats."""
 
     scan_requested = Signal(str)   # target CIDR
+    scan_stop_requested = Signal()
+    stat_filter_requested = Signal(str)  # filter_key: "all", "cameras", "pcs", "vulns", "critical"
     device_selected = Signal(object)
     device_inspect = Signal(object)
 
@@ -138,16 +167,18 @@ class DashboardTab(QWidget):
         auto_bar.addWidget(self._auto_report)
         layout.addLayout(auto_bar)
 
-        # Stats row
+        # Stats row (clickable filter cards)
         stats_layout = QHBoxLayout()
-        self._stat_hosts = StatCard(tr("Hosts Found"), "0", "#5a7ea0")
-        self._stat_cameras = StatCard(tr("IP Cameras"), "0", "#a05050")
-        self._stat_pcs = StatCard(tr("PCs / Servers"), "0", "#4a8a5a")
-        self._stat_vulns = StatCard(tr("Vulnerabilities"), "0", "#b09040")
-        self._stat_critical = StatCard(tr("Critical"), "0", "#c04848")
+        self._stat_hosts = StatCard(tr("Hosts Found"), "0", "#5a7ea0", filter_key="all")
+        self._stat_cameras = StatCard(tr("IP Cameras"), "0", "#a05050", filter_key="cameras")
+        self._stat_pcs = StatCard(tr("PCs / Servers"), "0", "#4a8a5a", filter_key="pcs")
+        self._stat_vulns = StatCard(tr("Vulnerabilities"), "0", "#b09040", filter_key="vulns")
+        self._stat_critical = StatCard(tr("Critical"), "0", "#c04848", filter_key="critical")
 
-        for card in [self._stat_hosts, self._stat_cameras, self._stat_pcs,
-                     self._stat_vulns, self._stat_critical]:
+        self._stat_cards = [self._stat_hosts, self._stat_cameras, self._stat_pcs,
+                            self._stat_vulns, self._stat_critical]
+        for card in self._stat_cards:
+            card.clicked.connect(self._on_stat_clicked)
             stats_layout.addWidget(card)
         layout.addLayout(stats_layout)
 
@@ -198,14 +229,24 @@ class DashboardTab(QWidget):
         self._update_stats()
 
     def set_scan_enabled(self, enabled: bool) -> None:
-        self._scan_btn.setEnabled(enabled)
         self._depth_combo.setEnabled(enabled)
         self._auto_vuln.setEnabled(enabled)
         self._auto_report.setEnabled(enabled)
+        self._scanning = not enabled
         if enabled:
+            # Restore normal scan button
+            self._scan_btn.setEnabled(True)
+            self._scan_btn.setObjectName("primaryButton")
+            self._scan_btn.style().unpolish(self._scan_btn)
+            self._scan_btn.style().polish(self._scan_btn)
             self._update_scan_btn_text()
         else:
-            self._scan_btn.setText(tr("Scanning..."))
+            # Switch to stop button
+            self._scan_btn.setEnabled(True)
+            self._scan_btn.setText(tr("Stop Scan"))
+            self._scan_btn.setObjectName("dangerButton")
+            self._scan_btn.style().unpolish(self._scan_btn)
+            self._scan_btn.style().polish(self._scan_btn)
 
     def set_vuln_count(self, total: int, critical: int) -> None:
         self._stat_vulns.set_value(str(total))
@@ -236,6 +277,30 @@ class DashboardTab(QWidget):
             ))
         ))
 
+    def _on_stat_clicked(self, filter_key: str) -> None:
+        """Handle stat card click — toggle active state and emit filter signal."""
+        # Find the clicked card
+        clicked_card = None
+        for card in self._stat_cards:
+            if card._filter_key == filter_key:
+                clicked_card = card
+                break
+
+        if clicked_card and clicked_card._active:
+            # Clicking active card deactivates it (deselect all)
+            clicked_card.set_active(False)
+            self.stat_filter_requested.emit("")  # empty = clear filter
+        else:
+            # Deactivate all, activate clicked one
+            for card in self._stat_cards:
+                card.set_active(card._filter_key == filter_key)
+            self.stat_filter_requested.emit(filter_key)
+
+    def clear_stat_filter(self) -> None:
+        """Deactivate all stat cards (called externally when selection changes)."""
+        for card in self._stat_cards:
+            card.set_active(False)
+
     def _on_interface_changed(self, index: int) -> None:
         """Auto-fill target range when interface is selected."""
         iface = self._interface_combo.currentData()
@@ -248,6 +313,11 @@ class DashboardTab(QWidget):
             self._target_input.setText(f"{parts[0]}.0/24")
 
     def _on_scan_clicked(self) -> None:
+        # If scanning, this button acts as stop
+        if getattr(self, '_scanning', False):
+            self.scan_stop_requested.emit()
+            return
+
         target = self._target_input.text().strip()
         if target:
             self.scan_requested.emit(target)

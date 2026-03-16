@@ -335,8 +335,10 @@ class MainWindow(QMainWindow):
 
         # Dashboard
         self._dashboard.scan_requested.connect(self._start_full_scan)
+        self._dashboard.scan_stop_requested.connect(self._stop_full_scan)
         self._dashboard.device_selected.connect(self._on_device_selected)
         self._dashboard.device_inspect.connect(self._on_device_inspect)
+        self._dashboard.stat_filter_requested.connect(self._on_stat_filter)
 
         # Network graph context menu signals + selection sync
         graph = self._dashboard.network_graph
@@ -455,6 +457,15 @@ class MainWindow(QMainWindow):
         self._scan_worker.finished.connect(self._on_scan_finished)
         self._scan_worker.error.connect(self._on_scan_error)
         self._scan_worker.start()
+
+    def _stop_full_scan(self) -> None:
+        """Stop the running full network scan."""
+        if self._scan_worker and self._scan_worker.isRunning():
+            log.info("Aborting full network scan...")
+            self._scan_worker.abort()
+            self._status_label.setText(tr("Scan aborted"))
+            self._progress.setVisible(False)
+            self._dashboard.set_scan_enabled(True)
 
     @Slot(str, int)
     def _on_scan_progress(self, message: str, percent: int) -> None:
@@ -769,6 +780,59 @@ class MainWindow(QMainWindow):
                 card.set_selected(True, emit=False)
                 self._selected_devices.add(ip)
             graph.set_all_checked(True)
+        self._update_selection_label()
+
+    # --- Stat card filter ---
+
+    _CAMERA_TYPES = {DeviceType.IP_CAMERA, DeviceType.NVR_DVR}
+    _PC_TYPES = {DeviceType.PC_WINDOWS, DeviceType.PC_LINUX, DeviceType.PC_MAC,
+                 DeviceType.SERVER, DeviceType.LAPTOP}
+
+    def _on_stat_filter(self, filter_key: str) -> None:
+        """Select devices matching the clicked stat card filter."""
+        graph = self._dashboard.network_graph
+
+        if not filter_key:
+            # Clear filter — deselect all
+            for card in self._device_cards.values():
+                card.set_selected(False, emit=False)
+            graph.set_all_checked(False)
+            self._selected_devices.clear()
+            self._update_selection_label()
+            return
+
+        # Determine which IPs match the filter
+        matching_ips: set[str] = set()
+
+        if filter_key == "all":
+            matching_ips = set(self._devices.keys())
+
+        elif filter_key == "cameras":
+            matching_ips = {ip for ip, d in self._devices.items()
+                           if d.device_type in self._CAMERA_TYPES}
+
+        elif filter_key == "pcs":
+            matching_ips = {ip for ip, d in self._devices.items()
+                           if d.device_type in self._PC_TYPES}
+
+        elif filter_key == "vulns":
+            matching_ips = {v.host_ip for v in self._vulns
+                           if v.host_ip in self._devices}
+
+        elif filter_key == "critical":
+            matching_ips = {v.host_ip for v in self._vulns
+                           if v.severity.value in ("critical", "high")
+                           and v.host_ip in self._devices}
+
+        # Apply selection
+        self._selected_devices = matching_ips.copy()
+
+        for ip, card in self._device_cards.items():
+            card.set_selected(ip in matching_ips, emit=False)
+
+        for ip in self._devices:
+            graph.set_node_checked(ip, ip in matching_ips)
+
         self._update_selection_label()
 
     def _get_selected_devices(self) -> list[Device]:

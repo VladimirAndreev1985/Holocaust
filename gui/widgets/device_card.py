@@ -11,6 +11,7 @@ from PySide6.QtGui import QFont, QAction
 
 from core.i18n import tr
 from models.device import Device, DeviceType
+from gui.widgets.network_graph import DEVICE_COLORS
 
 
 DEVICE_ICONS = {
@@ -127,13 +128,14 @@ class DeviceCard(QFrame):
         self._checkbox.toggled.connect(self._on_checkbox_toggled)
         self._layout.addWidget(self._checkbox)
 
-        # Icon
+        # Icon (colored by device type — matches graph node colors)
+        type_color = DEVICE_COLORS.get(self.device.device_type, "#484850")
         icon_label = QLabel(DEVICE_ICONS.get(self.device.device_type, "?"))
         icon_label.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         icon_label.setFixedSize(40, 40)
         icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         icon_label.setStyleSheet(f"""
-            background-color: {self.device.risk_level.color};
+            background-color: {type_color};
             color: white;
             border-radius: 20px;
         """)
