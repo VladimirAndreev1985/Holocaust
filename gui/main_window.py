@@ -175,8 +175,11 @@ class MainWindow(QMainWindow):
         self._interfaces.check_kill.connect(
             lambda: self._iface_manager.airmon_check_kill() or self._refresh_interfaces())
 
+        # Sync target between Dashboard and LAN tabs
+        self._dashboard.scan_requested.connect(self._lan.set_target)
+
         # LAN
-        self._lan.scan_requested.connect(lambda: self._start_full_scan(self._get_default_target()))
+        self._lan.scan_requested.connect(self._start_full_scan)
         self._lan.device_selected.connect(self._on_device_selected)
         self._lan.device_inspect.connect(self._on_device_inspect)
         self._lan.vuln_scan_requested.connect(self._start_vuln_scan)

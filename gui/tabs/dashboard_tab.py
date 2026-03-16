@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGridLayout, QComboBox, QSplitter,
+    QFrame, QGridLayout, QComboBox, QSplitter, QLineEdit,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
@@ -74,6 +74,17 @@ class DashboardTab(QWidget):
         self._interface_combo = QComboBox()
         self._interface_combo.setMinimumWidth(200)
         self._interface_combo.setPlaceholderText("Select network interface...")
+        self._interface_combo.currentIndexChanged.connect(self._on_interface_changed)
+
+        self._target_input = QLineEdit()
+        self._target_input.setPlaceholderText("Target: 192.168.1.0/24")
+        self._target_input.setMinimumWidth(200)
+        self._target_input.setMaximumWidth(250)
+        self._target_input.setToolTip(
+            "Scan target — auto-detected from interface.\n"
+            "Edit manually to scan custom range.\n"
+            "Examples: 192.168.1.0/24, 10.0.0.1-50, 172.16.0.0/16"
+        )
 
         self._scan_btn = QPushButton("Full Network Audit")
         self._scan_btn.setObjectName("primaryButton")
@@ -83,6 +94,7 @@ class DashboardTab(QWidget):
         top_bar.addWidget(title)
         top_bar.addStretch()
         top_bar.addWidget(self._interface_combo)
+        top_bar.addWidget(self._target_input)
         top_bar.addWidget(self._scan_btn)
         layout.addLayout(top_bar)
 
@@ -106,10 +118,15 @@ class DashboardTab(QWidget):
         layout.addWidget(self.network_graph, 1)
 
     def set_interfaces(self, interfaces: list) -> None:
+        self._interface_combo.blockSignals(True)
         self._interface_combo.clear()
         for iface in interfaces:
             display = f"{iface.name} ({iface.ip_address})" if iface.ip_address else iface.name
             self._interface_combo.addItem(display, iface)
+        self._interface_combo.blockSignals(False)
+        # Auto-detect target from first connected interface
+        if self._interface_combo.count() > 0:
+            self._on_interface_changed(0)
 
     def add_device(self, device: Device) -> None:
         self._devices.append(device)
@@ -145,11 +162,29 @@ class DashboardTab(QWidget):
             ))
         ))
 
+    def _on_interface_changed(self, index: int) -> None:
+        """Auto-fill target range when interface is selected."""
+        iface = self._interface_combo.currentData()
+        if not iface:
+            return
+        if iface.cidr:
+            self._target_input.setText(iface.cidr)
+        elif iface.ip_address:
+            parts = iface.ip_address.rsplit(".", 1)
+            self._target_input.setText(f"{parts[0]}.0/24")
+
     def _on_scan_clicked(self) -> None:
+        target = self._target_input.text().strip()
+        if target:
+            self.scan_requested.emit(target)
+            return
+        # Fallback: try to get from interface
         iface = self._interface_combo.currentData()
         if iface and iface.cidr:
+            self._target_input.setText(iface.cidr)
             self.scan_requested.emit(iface.cidr)
         elif iface and iface.ip_address:
-            # Fallback: use /24
             parts = iface.ip_address.rsplit(".", 1)
-            self.scan_requested.emit(f"{parts[0]}.0/24")
+            target = f"{parts[0]}.0/24"
+            self._target_input.setText(target)
+            self.scan_requested.emit(target)

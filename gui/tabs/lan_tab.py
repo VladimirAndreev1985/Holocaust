@@ -18,7 +18,7 @@ class LanTab(QWidget):
 
     device_selected = Signal(object)
     device_inspect = Signal(object)
-    scan_requested = Signal()
+    scan_requested = Signal(str)   # target CIDR
     vuln_scan_requested = Signal(list)  # list[Device]
 
     def __init__(self, parent=None):
@@ -37,14 +37,21 @@ class LanTab(QWidget):
         header.addWidget(title)
         header.addStretch()
 
+        self._target_input = QLineEdit()
+        self._target_input.setPlaceholderText("Target: 192.168.1.0/24")
+        self._target_input.setMinimumWidth(200)
+        self._target_input.setMaximumWidth(250)
+        self._target_input.returnPressed.connect(self._on_scan)
+
         self._scan_btn = QPushButton("Scan Network")
         self._scan_btn.setObjectName("primaryButton")
-        self._scan_btn.clicked.connect(self.scan_requested.emit)
+        self._scan_btn.clicked.connect(self._on_scan)
 
         self._vuln_btn = QPushButton("Vuln Scan Selected")
         self._vuln_btn.setObjectName("dangerButton")
         self._vuln_btn.clicked.connect(self._on_vuln_scan)
 
+        header.addWidget(self._target_input)
         header.addWidget(self._scan_btn)
         header.addWidget(self._vuln_btn)
         layout.addLayout(header)
@@ -190,6 +197,15 @@ class LanTab(QWidget):
             device = item.data(Qt.ItemDataRole.UserRole)
             if device:
                 self.device_inspect.emit(device)
+
+    def set_target(self, target: str) -> None:
+        """Set scan target from outside (e.g. synced from Dashboard)."""
+        self._target_input.setText(target)
+
+    def _on_scan(self) -> None:
+        target = self._target_input.text().strip()
+        if target:
+            self.scan_requested.emit(target)
 
     def _on_vuln_scan(self) -> None:
         selected_devices = []
