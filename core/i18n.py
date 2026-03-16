@@ -951,6 +951,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "{count} device(s) selected": {
         "ru": "{count} устройств выбрано",
     },
+    "Scanning {count}...": {
+        "ru": "Сканирование {count}...",
+    },
+    "Stop": {
+        "ru": "Стоп",
+    },
+    "Scan aborted": {
+        "ru": "Сканирование прервано",
+    },
 
     # ============================================================
     #  Restart notice

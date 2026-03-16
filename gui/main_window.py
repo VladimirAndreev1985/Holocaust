@@ -167,6 +167,55 @@ class MainWindow(QMainWindow):
 
         sidebar_layout.addLayout(toolbar)
 
+        # === Scan progress indicator in sidebar ===
+        self._sidebar_scan_widget = QWidget()
+        scan_indicator_layout = QHBoxLayout(self._sidebar_scan_widget)
+        scan_indicator_layout.setContentsMargins(0, 2, 0, 2)
+        scan_indicator_layout.setSpacing(4)
+
+        self._sidebar_scan_label = QLabel("")
+        self._sidebar_scan_label.setStyleSheet("color: #b09040; font-size: 11px; font-weight: bold;")
+        scan_indicator_layout.addWidget(self._sidebar_scan_label, 1)
+
+        self._sidebar_progress = QProgressBar()
+        self._sidebar_progress.setFixedHeight(14)
+        self._sidebar_progress.setStyleSheet("""
+            QProgressBar {
+                background-color: #18181e;
+                border: 1px solid #303040;
+                border-radius: 3px;
+                text-align: center;
+                color: #b0b0b8;
+                font-size: 10px;
+            }
+            QProgressBar::chunk {
+                background-color: #5a7ea0;
+                border-radius: 2px;
+            }
+        """)
+        scan_indicator_layout.addWidget(self._sidebar_progress)
+
+        self._stop_scan_btn = QPushButton(tr("Stop"))
+        self._stop_scan_btn.setFixedSize(40, 20)
+        self._stop_scan_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #a05050;
+                color: white;
+                border: none;
+                border-radius: 3px;
+                font-size: 10px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #c06060;
+            }
+        """)
+        self._stop_scan_btn.clicked.connect(self._stop_host_scan)
+        scan_indicator_layout.addWidget(self._stop_scan_btn)
+
+        self._sidebar_scan_widget.setVisible(False)
+        sidebar_layout.addWidget(self._sidebar_scan_widget)
+
         # Device list scroll area
         self._device_list_area = QScrollArea()
         self._device_list_area.setWidgetResizable(True)
@@ -482,8 +531,12 @@ class MainWindow(QMainWindow):
             tr("Scanning {count} host(s)...").format(count=len(devices))
         )
 
+        # Show sidebar scan indicator + disable toolbar
+        self._set_host_scan_ui(True, len(devices))
+
         self._host_worker = HostScanWorker(devices, config, vuln_scan=vuln_scan)
         self._host_worker.progress.connect(self._on_scan_progress)
+        self._host_worker.progress.connect(self._on_sidebar_progress)
         self._host_worker.host_updated.connect(self._on_host_scanned)
         self._host_worker.vuln_found.connect(self._on_vuln_found)
         self._host_worker.finished.connect(self._on_host_scan_finished)
@@ -515,10 +568,41 @@ class MainWindow(QMainWindow):
             f"services={len(device.services)}"
         )
 
+    def _set_host_scan_ui(self, scanning: bool, count: int = 0) -> None:
+        """Show/hide sidebar scan indicator and enable/disable toolbar buttons."""
+        self._sidebar_scan_widget.setVisible(scanning)
+        if scanning:
+            self._sidebar_scan_label.setText(
+                tr("Scanning {count}...").format(count=count)
+            )
+            self._sidebar_progress.setValue(0)
+        # Disable/enable toolbar batch buttons during scan
+        self._batch_scan_btn.setEnabled(not scanning)
+        self._batch_msf_btn.setEnabled(not scanning)
+        self._batch_remove_btn.setEnabled(not scanning)
+
+    @Slot(str, int)
+    def _on_sidebar_progress(self, message: str, percent: int) -> None:
+        """Update sidebar progress bar."""
+        self._sidebar_progress.setValue(percent)
+        # Show short message (just the IP part)
+        self._sidebar_scan_label.setText(message[:40])
+
+    def _stop_host_scan(self) -> None:
+        """Abort the current host scan."""
+        if self._host_worker and self._host_worker.isRunning():
+            self._host_worker.abort()
+            log.info("Host scan aborted by user")
+            self._status_label.setText(tr("Scan aborted"))
+            self._progress.setVisible(False)
+            self._set_host_scan_ui(False)
+            self._host_scan_ips = []
+
     @Slot()
     def _on_host_scan_finished(self) -> None:
         self._status_label.setText(tr("Host scan complete"))
         self._progress.setVisible(False)
+        self._set_host_scan_ui(False)
 
         critical = sum(1 for v in self._vulns
                        if v.severity.value in ("critical", "high"))
