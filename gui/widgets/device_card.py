@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QMenu, QApplication,
-    QCheckBox,
+    QCheckBox, QLayout,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QAction
@@ -57,8 +57,14 @@ class DeviceCard(QFrame):
         self.setFixedHeight(80)
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
+
+        # Create layout once — never recreate
+        self._layout = QHBoxLayout(self)
+        self._layout.setContentsMargins(4, 6, 8, 6)
+        self._layout.setSpacing(8)
+
         self._apply_style()
-        self._setup_ui()
+        self._build_content()
 
     @property
     def is_selected(self) -> bool:
@@ -93,21 +99,33 @@ class DeviceCard(QFrame):
             }}
         """)
 
-    def _setup_ui(self) -> None:
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 6, 8, 6)
-        layout.setSpacing(8)
+    def _clear_layout(self) -> None:
+        """Remove all widgets and sub-layouts from the main layout."""
+        while self._layout.count():
+            item = self._layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                # Recursively clear sub-layout
+                sub = item.layout()
+                while sub.count():
+                    sub_item = sub.takeAt(0)
+                    if sub_item.widget():
+                        sub_item.widget().deleteLater()
 
+    def _build_content(self) -> None:
+        """Populate the existing layout with widgets. Safe to call multiple times."""
         # Checkbox for multi-select
         self._checkbox = QCheckBox()
         self._checkbox.setFixedSize(18, 18)
+        self._checkbox.setChecked(self._selected)
         self._checkbox.setStyleSheet("""
             QCheckBox::indicator { width: 14px; height: 14px; }
             QCheckBox::indicator:unchecked { border: 1px solid #404050; background: #18181e; border-radius: 2px; }
             QCheckBox::indicator:checked { border: 1px solid #5a7ea0; background: #5a7ea0; border-radius: 2px; }
         """)
         self._checkbox.toggled.connect(self._on_checkbox_toggled)
-        layout.addWidget(self._checkbox)
+        self._layout.addWidget(self._checkbox)
 
         # Icon
         icon_label = QLabel(DEVICE_ICONS.get(self.device.device_type, "?"))
@@ -119,7 +137,7 @@ class DeviceCard(QFrame):
             color: white;
             border-radius: 20px;
         """)
-        layout.addWidget(icon_label)
+        self._layout.addWidget(icon_label)
 
         # Info
         info_layout = QVBoxLayout()
@@ -145,7 +163,7 @@ class DeviceCard(QFrame):
         info_layout.addWidget(name)
         info_layout.addWidget(details)
         info_layout.addWidget(risk_label)
-        layout.addLayout(info_layout, 1)
+        self._layout.addLayout(info_layout, 1)
 
     def _on_checkbox_toggled(self, checked: bool) -> None:
         self._selected = checked
@@ -208,11 +226,8 @@ class DeviceCard(QFrame):
         super().mouseDoubleClickEvent(event)
 
     def update_device(self, device: Device) -> None:
+        """Update card with new device data. Preserves selection state."""
         self.device = device
-        # Clear and rebuild
-        while self.layout().count():
-            item = self.layout().takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        self._setup_ui()
+        self._clear_layout()
+        self._build_content()
         self._apply_style()
