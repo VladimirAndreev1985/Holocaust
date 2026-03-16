@@ -1,0 +1,9 @@
+PySide6>=6.6.0
+python-nmap>=0.7.1
+scapy>=2.5.0
+psutil>=5.9.0
+requests>=2.31.0
+vulners>=2.1.0
+pymsf>=0.1.0
+jinja2>=3.1.0
+xhtml2pdf>=0.2.11
