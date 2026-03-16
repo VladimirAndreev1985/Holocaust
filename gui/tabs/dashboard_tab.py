@@ -104,7 +104,7 @@ class DashboardTab(QWidget):
 
         self._scan_btn = QPushButton()
         self._scan_btn.setObjectName("primaryButton")
-        self._scan_btn.setMinimumWidth(200)
+        self._scan_btn.setMinimumWidth(250)
         self._scan_btn.clicked.connect(self._on_scan_clicked)
         self._depth_combo.currentIndexChanged.connect(self._update_scan_btn_text)
         self._update_scan_btn_text()
